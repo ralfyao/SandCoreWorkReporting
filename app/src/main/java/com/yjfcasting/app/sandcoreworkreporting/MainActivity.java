@@ -12,6 +12,7 @@ import android.util.Log;
 import android.view.Gravity;
 import android.view.View;
 import android.widget.EditText;
+import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TableLayout;
 import android.widget.TableRow;
@@ -20,14 +21,23 @@ import android.widget.Toast;
 
 import androidx.activity.EdgeToEdge;
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.cardview.widget.CardView;
 import androidx.core.content.res.ResourcesCompat;
 import androidx.core.graphics.Insets;
+import androidx.core.view.GravityCompat;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
+import androidx.drawerlayout.widget.DrawerLayout;
+import androidx.navigation.NavController;
+import androidx.navigation.NavDestination;
+import androidx.navigation.Navigation;
+import androidx.navigation.ui.AppBarConfiguration;
+import androidx.navigation.ui.NavigationUI;
 
+import com.google.android.material.navigation.NavigationView;
 import com.google.gson.Gson;
 import com.yjfcasting.app.sandcoreworkreporting.model.SnadCoreModel;
 import com.yjfcasting.app.sandcoreworkreporting.ui.login.LoginActivity;
@@ -70,6 +80,7 @@ public class MainActivity extends AppCompatActivity {
     private static String departmentName = "";// 部門名稱
     private static HashMap hm = new HashMap();// 製令-鐵斗的對應物件
     private static boolean isManager = false;// 是否為系統管理者
+    private AppBarConfiguration appBarConfiguration;
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -81,6 +92,83 @@ public class MainActivity extends AppCompatActivity {
             v.setPadding(systemBars.left, systemBars.top, systemBars.right, systemBars.bottom);
             return insets;
         });
+        // set Drawer and Custom Action Bar
+        androidx.appcompat.widget.Toolbar customToolbar = findViewById(R.id.custom_toolbar);
+        setSupportActionBar(customToolbar);
+
+        DrawerLayout drawerLayout = findViewById(R.id.drawerLayout);
+        NavController navController = Navigation.findNavController(this, R.id.nav_host_fragment);
+
+        appBarConfiguration = new AppBarConfiguration.Builder(
+            R.id.nav_home,
+            R.id.nav_settings
+        ).setOpenableLayout(drawerLayout).build();
+
+        NavigationUI.setupActionBarWithNavController(this, navController, appBarConfiguration);
+
+        getSupportActionBar().setDisplayShowTitleEnabled(false);
+
+//        drawerLayout.closeDrawer(GravityCompat.START);
+        //设置左侧菜单
+        NavigationView navigationView = findViewById(R.id.navigation_view);
+//        navigationView.setNavigationItemSelectedListener(item -> {
+//            boolean handled = NavigationUI.onNavDestinationSelected(item, navController);
+//            if (handled) {
+//                drawerLayout.closeDrawer(GravityCompat.START);  // <- 手動關閉 Drawer
+//            }
+//            return handled;
+//        });
+        NavigationUI.setupWithNavController(navigationView, navController);
+
+        navController.addOnDestinationChangedListener(new NavController.OnDestinationChangedListener()
+        {
+            @Override
+            public void onDestinationChanged( @NonNull NavController controller, @NonNull NavDestination destination, @Nullable Bundle arguments)
+            {
+                // 不使用預設的箭頭
+                getSupportActionBar().setDisplayHomeAsUpEnabled(false);
+
+                // 不使用預設的漢堡圖
+                getSupportActionBar().setHomeButtonEnabled(false);
+
+                ImageView customHamburgerIcon = customToolbar.findViewById(R.id.custom_hamburger_icon);
+                TextView fragmentTitle = customToolbar.findViewById(R.id.fragment_title);
+
+                if(destination.getId() == R.id.nav_home || destination.getId() == R.id.nav_settings || destination.getId()==R.id.nav_profile) {
+                    customHamburgerIcon.setImageResource(R.drawable.icon_menu_n);  // 漢堡圖示
+                } else {
+                    customHamburgerIcon.setImageResource(R.drawable.icon_back_n);  // 返回圖示
+                }
+
+                // Set the title based on the current fragment
+                CharSequence label = destination.getLabel();
+                if (label != null) {
+                    fragmentTitle.setText(label);
+                }
+            }
+        });
+
+        ImageView customHamburgerIcon = customToolbar.findViewById(R.id.custom_hamburger_icon);
+        customHamburgerIcon.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                NavDestination currentDestination = navController.getCurrentDestination();
+                if (currentDestination != null) {
+                    if (currentDestination.getId() == R.id.nav_home || currentDestination.getId() == R.id.nav_settings || currentDestination.getId()==R.id.nav_profile) {
+                        // 開啟或關閉 drawer
+                        if (drawerLayout.isDrawerOpen(GravityCompat.START)) {
+                            drawerLayout.closeDrawer(GravityCompat.START);
+                        } else {
+                            drawerLayout.openDrawer(GravityCompat.START);
+                        }
+                    } else {
+                        // 返回上一個 Fragment
+                        navController.navigateUp();
+                    }
+                }
+            }
+        });
+
         Intent intent = getIntent();
         if (intent != null) {
             reportWorkingNumber = intent.getStringExtra("employeecode");
@@ -482,5 +570,14 @@ public class MainActivity extends AppCompatActivity {
     public void logout(View view) {
         Intent intent = new Intent(this, LoginActivity.class);
         startActivity(intent);
+    }
+    /**
+     * 左上角的菜单被点击时调用到
+     */
+    @Override
+    public boolean onSupportNavigateUp()
+    {
+        NavController navController = Navigation.findNavController(this, R.id.nav_host_fragment);
+        return NavigationUI.navigateUp(navController, appBarConfiguration) || super.onSupportNavigateUp();
     }
 }

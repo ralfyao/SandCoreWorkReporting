@@ -3,7 +3,20 @@
     <style name="Base.Theme.SandCoreWorkReporting" parent="Theme.Material3.DayNight.NoActionBar">
         <!-- Customize your light theme here. -->
         <!-- <item name="colorPrimary">@color/my_light_primary</item> -->
+        <item name="windowActionBar">false</item>
+        <item name="windowNoTitle">true</item>
     </style>
 
     <style name="Theme.SandCoreWorkReporting" parent="Base.Theme.SandCoreWorkReporting" />
+    <style name="MyNavigationViewStyle" parent="Widget.AppCompat.DrawerArrowToggle">
+        <item name="colorPrimary">#606a82</item>
+        <item name="itemIconTint">@color/selector_menu_item_text</item>
+        <item name="itemTextColor">@color/selector_menu_item_text</item>
+        <item name="itemTextAppearance">@style/MyNavigationDrawerTextStyle</item>
+        <item name="itemBackground">@drawable/nav_item_background_selector</item>
+    </style>
+    <style name="MyNavigationDrawerTextStyle" parent="TextAppearance.MaterialComponents.Subtitle1">
+        <item name="android:textSize">16sp</item>
+        <item name="android:textColor">@color/teal_700</item>
+    </style>
 </resources>

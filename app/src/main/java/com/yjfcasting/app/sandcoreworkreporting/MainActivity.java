@@ -2,14 +2,16 @@ package com.yjfcasting.app.sandcoreworkreporting;
 
 import static android.view.ViewGroup.LayoutParams.MATCH_PARENT;
 
-import android.content.DialogInterface;
 import android.content.Intent;
 import android.graphics.Color;
 import android.graphics.Typeface;
 import android.os.Bundle;
+import android.os.Handler;
 import android.text.InputType;
 import android.util.Log;
+import android.view.GestureDetector;
 import android.view.Gravity;
+import android.view.MotionEvent;
 import android.view.View;
 import android.widget.EditText;
 import android.widget.ImageView;
@@ -36,24 +38,21 @@ import androidx.navigation.NavDestination;
 import androidx.navigation.Navigation;
 import androidx.navigation.ui.AppBarConfiguration;
 import androidx.navigation.ui.NavigationUI;
+import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 
 import com.google.android.material.navigation.NavigationView;
 import com.google.gson.Gson;
 import com.yjfcasting.app.sandcoreworkreporting.model.SnadCoreModel;
 import com.yjfcasting.app.sandcoreworkreporting.ui.login.LoginActivity;
-import com.yjfcasting.app.sandcoreworkreporting.vo.PROD_WorkOrderDispatch;
 import com.yjfcasting.app.sandcoreworkreporting.vo.SandcoreWorkOrderRes;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
-import java.util.Iterator;
-import java.util.Set;
 import java.util.Timer;
 import java.util.TimerTask;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
-
 import okhttp3.Call;
 import okhttp3.Callback;
 import okhttp3.OkHttpClient;
@@ -64,13 +63,13 @@ import okhttp3.logging.HttpLoggingInterceptor;
 
 public class MainActivity extends AppCompatActivity {
     private ArrayList<ArrayList<String>> gradingData = new ArrayList<ArrayList<String>>();
-    private OkHttpClient okHttpClient = new OkHttpClient().newBuilder().addInterceptor(
+    private final OkHttpClient okHttpClient = new OkHttpClient().newBuilder().addInterceptor(
             new HttpLoggingInterceptor().setLevel(HttpLoggingInterceptor.Level.BASIC)
     ).connectTimeout(150, TimeUnit.SECONDS) // 連線超時
     .writeTimeout(150, TimeUnit.SECONDS)   // 傳送資料超時
     .readTimeout(300, TimeUnit.SECONDS) .build();
-    private ArrayList<PROD_WorkOrderDispatch> data = new ArrayList<PROD_WorkOrderDispatch>();
-    private static ArrayList<String> workOrderList = new ArrayList<>();;// 製令列表
+//    private ArrayList<PROD_WorkOrderDispatch> data = new ArrayList<PROD_WorkOrderDispatch>();
+    private static ArrayList<String> workOrderList = new ArrayList<>();// 製令列表
     private Timer mTimer = null;
     private SnadCoreModel model = null;
     private static String reportWorkingNumber = "";// 工號
@@ -81,94 +80,20 @@ public class MainActivity extends AppCompatActivity {
     private static HashMap hm = new HashMap();// 製令-鐵斗的對應物件
     private static boolean isManager = false;// 是否為系統管理者
     private AppBarConfiguration appBarConfiguration;
+    private SwipeRefreshLayout swipeRefreshLayout;
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+
         EdgeToEdge.enable(this);
-        setContentView(R.layout.activity_main);
+        this.setContentView(R.layout.activity_main);
         hm.clear();
         ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.main), (v, insets) -> {
             Insets systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars());
             v.setPadding(systemBars.left, systemBars.top, systemBars.right, systemBars.bottom);
             return insets;
         });
-        // set Drawer and Custom Action Bar
-        androidx.appcompat.widget.Toolbar customToolbar = findViewById(R.id.custom_toolbar);
-        setSupportActionBar(customToolbar);
-
-        DrawerLayout drawerLayout = findViewById(R.id.drawerLayout);
-        NavController navController = Navigation.findNavController(this, R.id.nav_host_fragment);
-
-        appBarConfiguration = new AppBarConfiguration.Builder(
-            R.id.nav_home,
-            R.id.nav_settings
-        ).setOpenableLayout(drawerLayout).build();
-
-        NavigationUI.setupActionBarWithNavController(this, navController, appBarConfiguration);
-
-        getSupportActionBar().setDisplayShowTitleEnabled(false);
-
-//        drawerLayout.closeDrawer(GravityCompat.START);
-        //设置左侧菜单
-        NavigationView navigationView = findViewById(R.id.navigation_view);
-//        navigationView.setNavigationItemSelectedListener(item -> {
-//            boolean handled = NavigationUI.onNavDestinationSelected(item, navController);
-//            if (handled) {
-//                drawerLayout.closeDrawer(GravityCompat.START);  // <- 手動關閉 Drawer
-//            }
-//            return handled;
-//        });
-        NavigationUI.setupWithNavController(navigationView, navController);
-
-        navController.addOnDestinationChangedListener(new NavController.OnDestinationChangedListener()
-        {
-            @Override
-            public void onDestinationChanged( @NonNull NavController controller, @NonNull NavDestination destination, @Nullable Bundle arguments)
-            {
-                // 不使用預設的箭頭
-                getSupportActionBar().setDisplayHomeAsUpEnabled(false);
-
-                // 不使用預設的漢堡圖
-                getSupportActionBar().setHomeButtonEnabled(false);
-
-                ImageView customHamburgerIcon = customToolbar.findViewById(R.id.custom_hamburger_icon);
-                TextView fragmentTitle = customToolbar.findViewById(R.id.fragment_title);
-
-                if(destination.getId() == R.id.nav_home || destination.getId() == R.id.nav_settings || destination.getId()==R.id.nav_profile) {
-                    customHamburgerIcon.setImageResource(R.drawable.icon_menu_n);  // 漢堡圖示
-                } else {
-                    customHamburgerIcon.setImageResource(R.drawable.icon_back_n);  // 返回圖示
-                }
-
-                // Set the title based on the current fragment
-                CharSequence label = destination.getLabel();
-                if (label != null) {
-                    fragmentTitle.setText(label);
-                }
-            }
-        });
-
-        ImageView customHamburgerIcon = customToolbar.findViewById(R.id.custom_hamburger_icon);
-        customHamburgerIcon.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                NavDestination currentDestination = navController.getCurrentDestination();
-                if (currentDestination != null) {
-                    if (currentDestination.getId() == R.id.nav_home || currentDestination.getId() == R.id.nav_settings || currentDestination.getId()==R.id.nav_profile) {
-                        // 開啟或關閉 drawer
-                        if (drawerLayout.isDrawerOpen(GravityCompat.START)) {
-                            drawerLayout.closeDrawer(GravityCompat.START);
-                        } else {
-                            drawerLayout.openDrawer(GravityCompat.START);
-                        }
-                    } else {
-                        // 返回上一個 Fragment
-                        navController.navigateUp();
-                    }
-                }
-            }
-        });
-
+        setDrawerAndCustomActionBar();
         Intent intent = getIntent();
         if (intent != null) {
             reportWorkingNumber = intent.getStringExtra("employeecode");
@@ -183,23 +108,121 @@ public class MainActivity extends AppCompatActivity {
             Log.d("debug", "IsManager:"+isManager);
         }
         model = new SnadCoreModel();
-//        GetData();
         // 每隔5秒鐘抓取資料
-        mTimer = new Timer();
-        mTimer.scheduleAtFixedRate(new TimerTask() {
+//        mTimer = new Timer();
+        GetData();
+        swipeRefreshLayout = findViewById(R.id.swipe_layout);
+        View scrollView = findViewById(R.id.scrollView2);
+        swipeRefreshLayout.setOnRefreshListener(new SwipeRefreshLayout.OnRefreshListener() {
             @Override
-            public void run() {
-                GetData();
+            public void onRefresh() {
+                swipeRefreshLayout.setRefreshing(true);
+                // 執行刷新邏輯
+                new Handler().postDelayed(new Runnable() {
+                    @Override
+                    public void run() {
+                        GetData();
+                        Toast.makeText(MainActivity.this, "資料已重新整理", Toast.LENGTH_SHORT).show();
+                        swipeRefreshLayout.setRefreshing(false); // 停止動畫
+                    }
+                }, 1500); // 模擬 1.5 秒
             }
-        }, 0, 5000);
+        });
     }
+
+    private void setDrawerAndCustomActionBar() {
+        // set Drawer and Custom Action Bar
+        androidx.appcompat.widget.Toolbar customToolbar = findViewById(R.id.custom_toolbar);
+        setSupportActionBar(customToolbar);
+
+        DrawerLayout drawerLayout = findViewById(R.id.drawerLayout);
+        NavController navController = Navigation.findNavController(this, R.id.nav_host_fragment);
+
+        appBarConfiguration = new AppBarConfiguration.Builder(
+                R.id.nav_home,
+                R.id.nav_settings,
+                R.id.nav_profile
+        ).setOpenableLayout(drawerLayout).build();
+
+        NavigationUI.setupActionBarWithNavController(this, navController, appBarConfiguration);
+        try {
+            getSupportActionBar().setDisplayShowTitleEnabled(false);
+        } catch (NullPointerException np){
+            Log.e("Error", np + Arrays.toString(np.getStackTrace()));
+        }
+        //设置左侧菜单
+        NavigationView navigationView = findViewById(R.id.navigation_view);
+        navigationView.setNavigationItemSelectedListener(item -> {
+            Log.d("sandcoreworkreporting", "navigationView.NavigationItemSelected");
+            int id = item.getItemId();
+            if (id == R.id.nav_home){
+                Intent intent = new Intent(MainActivity.this, LoginActivity.class); // 改成你的目標 Activity
+                startActivity(intent);
+                finish(); // 如果你想結束 MainActivity 可加這行
+                return true;
+            }
+            if (id == R.id.nav_profile){
+                Intent intent = new Intent(MainActivity.this, DriverActivity.class);
+                intent.putExtra("deptcode", departmentNumber);
+                intent.putExtra("deptname", departmentName);
+                intent.putExtra("employeecode", reportWorkingNumber);
+                intent.putExtra("depttype", departmentType);
+                intent.putExtra("ismanager", isManager);
+                startActivity(intent);
+                finish();
+                return true;
+            }
+            return false;
+        });
+        navController.addOnDestinationChangedListener((controller, destination, arguments) -> {
+            // 不使用預設的箭頭
+            getSupportActionBar().setDisplayHomeAsUpEnabled(false);
+
+            // 使用預設的漢堡圖
+            getSupportActionBar().setHomeButtonEnabled(true);
+
+            ImageView customHamburgerIcon = customToolbar.findViewById(R.id.custom_hamburger_icon);
+            TextView fragmentTitle = customToolbar.findViewById(R.id.fragment_title);
+
+            if(destination.getId() == R.id.nav_home || destination.getId() == R.id.nav_settings || destination.getId()==R.id.nav_profile) {
+                customHamburgerIcon.setImageResource(R.drawable.icon_menu_n);  // 漢堡圖示
+            } else {
+                customHamburgerIcon.setImageResource(R.drawable.icon_back_n);  // 返回圖示
+            }
+
+            // Set the title based on the current fragment
+            CharSequence label = destination.getLabel();
+            if (label != null) {
+                fragmentTitle.setText(label);
+            }
+        });
+        ImageView customHamburgerIcon = customToolbar.findViewById(R.id.custom_hamburger_icon);
+        customHamburgerIcon.setOnClickListener(v -> {
+            NavDestination currentDestination = navController.getCurrentDestination();
+            if (currentDestination != null) {
+                if (currentDestination.getId() == R.id.nav_home || currentDestination.getId() == R.id.nav_settings || currentDestination.getId()==R.id.nav_profile) {
+                    // 開啟或關閉 drawer
+                    if (drawerLayout.isDrawerOpen(GravityCompat.START)) {
+                        drawerLayout.closeDrawer(GravityCompat.START);
+                    } else {
+                        drawerLayout.openDrawer(GravityCompat.START);
+                    }
+                } else {
+                    // 返回上一個 Fragment
+                    navController.navigateUp();
+                }
+            }
+        });
+
+    }
+
     private void GetData(){
         Request request = model.GetSandCoreList(departmentType, departmentName, isManager);
         Call call = okHttpClient.newCall(request);
         call.enqueue(new Callback() {
             @Override
             public void onFailure(@NonNull Call call, @NonNull IOException e) {
-                Log.e("SandCoreWorkingReport", e.toString()+e.getStackTrace());
+                Log.e("SandCoreWorkingReport", e + Arrays.toString(e.getStackTrace()));
             }
 
             @Override
@@ -218,7 +241,7 @@ public class MainActivity extends AppCompatActivity {
                     }
                     catch(Exception e)
                     {
-                        Log.d("error", e.toString()+e.getStackTrace());
+                        Log.d("error", e + Arrays.toString(e.getStackTrace()));
                     }
                     gradingData.clear();
                     String sftStation = "";
@@ -233,7 +256,7 @@ public class MainActivity extends AppCompatActivity {
                             dataContainer = new ArrayList<>();
                             if (!isManager) { // 非管理者列表
                                 dataContainer.add(res.resultList.get(i).SftStatus + "\r\n");
-                                dataContainer.add(String.valueOf(i + 1) + "\r\n");
+                                dataContainer.add((i + 1) + "\r\n");
                                 dataContainer.add(res.resultList.get(i).SandCorePlanStartDate + "\r\n");
                                 if (!res.resultList.get(i).SftStation.equals("造模") && !res.resultList.get(i).SftStation.equals("合模"))
                                     dataContainer.add(res.resultList.get(i).MoldingGroup + "\r\n");
@@ -242,15 +265,15 @@ public class MainActivity extends AppCompatActivity {
                                     dataContainer.add(res.resultList.get(i).AssemblingGroup + "\r\n");
                                 dataContainer.add(res.resultList.get(i).ItemNo + "\r\n");
                                 dataContainer.add(
-                                        (departmentType == "砂心" ? res.resultList.get(i).SandCoreWorkOrder : res.resultList.get(i).WorkOrder)
+                                        (departmentType.equals("砂心") ? res.resultList.get(i).SandCoreWorkOrder : res.resultList.get(i).WorkOrder)
                                                 + "\r\n" + (res.resultList.get(i).ItemDesc.length() > 9 ? res.resultList.get(i).ItemDesc.substring(0, 9) : res.resultList.get(i).ItemDesc));
-                                dataContainer.add(String.valueOf(res.resultList.get(i).ThisWeekQuantity) + "\r\n");
-                                dataContainer.add(String.valueOf(res.resultList.get(i).UnitWeight) + "\r\n");
+                                dataContainer.add((res.resultList.get(i).ThisWeekQuantity) + "\r\n");
+                                dataContainer.add((res.resultList.get(i).UnitWeight) + "\r\n");
                                 if (!res.resultList.get(i).SftStation.equals("合模"))
                                     dataContainer.add(res.resultList.get(i).SandCoreLocation + "\r\n");
                             } else { // 管理者列表
                                 dataContainer.add(res.resultList.get(i).SftStation + "\r\n" + res.resultList.get(i).SftStatus);
-                                dataContainer.add(String.valueOf(i + 1) + "\r\n");
+                                dataContainer.add((i + 1) + "\r\n");
                                 dataContainer.add(res.resultList.get(i).SandCorePlanStartDate + "\r\n");
                                 dataContainer.add(res.resultList.get(i).MoldingGroup + "\r\n");
                                 dataContainer.add(res.resultList.get(i).MoldingPlanStartDate + "\r\n");
@@ -259,8 +282,8 @@ public class MainActivity extends AppCompatActivity {
                                 dataContainer.add(
                                         (departmentType == "砂心" ? res.resultList.get(i).SandCoreWorkOrder : res.resultList.get(i).WorkOrder)
                                                 + "\r\n" + (res.resultList.get(i).ItemDesc.length() > 9 ? res.resultList.get(i).ItemDesc.substring(0, 9) : res.resultList.get(i).ItemDesc));
-                                dataContainer.add(String.valueOf(res.resultList.get(i).ThisWeekQuantity) + "\r\n");
-                                dataContainer.add(String.valueOf(res.resultList.get(i).UnitWeight) + "\r\n");
+                                dataContainer.add((res.resultList.get(i).ThisWeekQuantity) + "\r\n");
+                                dataContainer.add((res.resultList.get(i).UnitWeight) + "\r\n");
                                 dataContainer.add(res.resultList.get(i).SandCoreLocation + "\r\n");
                             }
                             workOrderList.add((departmentType.equals("砂心") ? res.resultList.get(i).SandCoreWorkOrder : res.resultList.get(i).WorkOrder));
@@ -270,31 +293,28 @@ public class MainActivity extends AppCompatActivity {
                    }
                     initGridViewWData(gradingData);
                 }catch (Exception ex){
-                    Log.e("SandCoreWorkingReport", ex.toString()+ex.getStackTrace());
+                    Log.e("SandCoreWorkingReport", ex + Arrays.toString(ex.getStackTrace()));
                 }
             }
         });
     }
 
     private void initGridViewWData(ArrayList<ArrayList<String>> dataResult){
-        runOnUiThread(new Runnable() {
-            @Override
-            public void run() {
-                try {
-                    LinearLayout parentLayout = findViewById(R.id.parentLayout);
-                    parentLayout.removeAllViews();
-                    parentLayout.addView(createTableLayout(gradingData.size(), gradingData.get(0).size()));
-                }
-                catch (Exception ex){
-                    Log.e("initGridViewWData error", ex.getMessage());
-                }
+        runOnUiThread(() -> {
+            try {
+                LinearLayout parentLayout = findViewById(R.id.parentLayout);
+                parentLayout.removeAllViews();
+                parentLayout.addView(createTableLayout(gradingData.size(), gradingData.get(0).size()));
+            }
+            catch (Exception ex){
+                Log.e("initGridViewWData error", ex.getMessage());
             }
         });
     }
 
     private ArrayList<String> initColumns(String SftStation){
         ArrayList<String> columns = new ArrayList<>();
-        if (SftStation.equals("") || SftStation.equals("砂心")){
+        if (SftStation.isEmpty() || SftStation.equals("砂心")){
             columns.add("報工狀態\r\n");
             columns.add("序號\r\n");
             columns.add("砂心預計\r\n生產日");
@@ -341,9 +361,10 @@ public class MainActivity extends AppCompatActivity {
             // 3) create tableRow
             final int index = i ;
             TableRow tableRow = new TableRow(this);
-            tableRow.setOnClickListener(new View.OnClickListener() {
-                @Override
-                public void onClick(View v) {
+            if (!isManager) { // 管理者不可報工
+                tableRow.setOnClickListener(v -> {
+                    if (index == 0)
+                        return;
                     // 定義Layout
                     // 建立一個垂直方向的 LinearLayout 作為容器
                     LinearLayout layout = new LinearLayout(MainActivity.this);
@@ -356,12 +377,12 @@ public class MainActivity extends AppCompatActivity {
                     input.setText(reportWorkingNumber);
                     input.setInputType(InputType.TYPE_CLASS_NUMBER);
                     layout.addView(input);
-                    if (hm.containsKey( workOrderList.get(index - 1))){
-                        flaskId = (String) hm.get( workOrderList.get(index - 1));
+                    Log.d("DEBUG", "index:"+index);
+                    if (hm.containsKey(workOrderList.get(index - 1))) {
+                        flaskId = (String) hm.get(workOrderList.get(index - 1));
                     }
                     final EditText flaskInput = new EditText(MainActivity.this);
-                    if (departmentType.equals("造模") || departmentType.equals("合模"))
-                    {
+                    if (departmentType.equals("造模") || departmentType.equals("合模")) {
                         flaskInput.setHint("請輸入鐵斗");
                         flaskInput.setText(flaskId);
                         flaskInput.setInputType(InputType.TYPE_CLASS_NUMBER);
@@ -371,160 +392,126 @@ public class MainActivity extends AppCompatActivity {
                     AlertDialog.Builder builder = new AlertDialog.Builder(MainActivity.this);
                     builder.setTitle("報工")
                             .setMessage(
-                                    (departmentType.equals("造模") || departmentType.equals("合模") )?   "製令編號："+( workOrderList.get(index - 1))+"，請輸入工號及鐵斗編號報工":   "製令編號："+( workOrderList.get(index - 1))+"，請輸入工號報工"
+                                    (departmentType.equals("造模") || departmentType.equals("合模")) ? "製令編號：" + (workOrderList.get(index - 1)) + "，請輸入工號及鐵斗編號報工" : "製令編號：" + (workOrderList.get(index - 1)) + "，請輸入工號報工"
                             )
                             .setView(layout);
-                    builder.setPositiveButton("報工", new DialogInterface.OnClickListener() {
-                                @Override
-                                public void onClick(DialogInterface dialog, int which) {
-                                     try {
-                                        if (gradingData.get(index).get(0).indexOf("已完成") != -1) {
-                                            Toast.makeText(MainActivity.this, "已完成無法再報工", Toast.LENGTH_LONG).show();
-                                            return;
-                                        }
-                                        if (reportWorkingNumber == null || reportWorkingNumber.equals("")){
-                                            reportWorkingNumber = input.getText().toString();
-                                        }
-                                        if (flaskId == null || flaskId.equals("")){
-                                            flaskId = flaskInput.getText().toString();
-                                        }
-                                        AtomicBoolean reportWorking = new AtomicBoolean(true);
-                                        if (!flaskId.equals(flaskInput.getText().toString())){
-                                            AlertDialog.Builder flaskBuilder = new AlertDialog.Builder(MainActivity.this);
-                                            if (departmentType.indexOf("合模") != -1) {
-                                                flaskBuilder.setTitle("報工")
-                                                        .setMessage("合模維護的下模編號與造模維護的編號不同，是否要更新?")
-                                                        .setPositiveButton("報工", new DialogInterface.OnClickListener() {
+                    builder.setPositiveButton("報工", (dialog, which) -> {
+                        try {
+                            if (gradingData.get(index).get(0).indexOf("已完成") != -1) {
+                                Toast.makeText(MainActivity.this, "已完成無法再報工", Toast.LENGTH_LONG).show();
+                                return;
+                            }
+                            if (reportWorkingNumber == null || reportWorkingNumber.isEmpty()) {
+                                reportWorkingNumber = input.getText().toString();
+                            }
+                            if (flaskId == null || flaskId.isEmpty()) {
+                                flaskId = flaskInput.getText().toString();
+                            }
+                            if (!flaskId.equals(flaskInput.getText().toString())) {
+                                AlertDialog.Builder flaskBuilder = new AlertDialog.Builder(MainActivity.this);
+                                if (departmentType.indexOf("合模") != -1) {
+                                    flaskBuilder.setTitle("報工")
+                                            .setMessage("合模維護的下模編號與造模維護的編號不同，是否要更新?")
+                                            .setPositiveButton("報工", (dialog1, which1) -> ((MainActivity) v.getContext()).runOnUiThread(
+                                                    () -> {
+                                                        String[] workOrderArr = workOrderList.get(index - 1).split("-");
+                                                        Request request = model.UploadSfcData(workOrderArr, gradingData, index, input.getText().toString(), flaskInput.getText().toString());
+                                                        Call call = okHttpClient.newCall(request);
+                                                        call.enqueue(new Callback() {
                                                             @Override
-                                                            public void onClick(DialogInterface dialog, int which) {
-                                                                ((MainActivity)v.getContext()).runOnUiThread(
-                                                                        new Runnable() {
-                                                                            @Override
-                                                                            public void run() {
-                                                                                String[] workOrderArr = workOrderList.get(index - 1).split("-");
-                                                                                Request request = model.UploadSfcData(workOrderArr, gradingData, index, input.getText().toString(), flaskInput.getText().toString());
-                                                                                Call call = okHttpClient.newCall(request);
-                                                                                call.enqueue(new Callback() {
-                                                                                    @Override
-                                                                                    public void onFailure(@NonNull Call call, @NonNull IOException e) {
-                                                                                        ((MainActivity) v.getContext()).runOnUiThread(
-                                                                                                new Runnable() {
-                                                                                                    @Override
-                                                                                                    public void run() {
-                                                                                                        Toast.makeText(MainActivity.this, e.toString() + e.getStackTrace(), Toast.LENGTH_LONG).show();
-                                                                                                    }
-                                                                                                }
-                                                                                        );
-                                                                                    }
-
-                                                                                    @Override
-                                                                                    public void onResponse(@NonNull Call call, @NonNull Response response) throws IOException {
-                                                                                        try {
-                                                                                            ((MainActivity) v.getContext()).runOnUiThread(
-                                                                                                    new Runnable() {
-                                                                                                        @Override
-                                                                                                        public void run() {
-                                                                                                            ResponseBody responseBody = response.body();
-                                                                                                            SandcoreWorkOrderRes res = new SandcoreWorkOrderRes();
-                                                                                                            try {
-                                                                                                                if (responseBody != null) {
-                                                                                                                    String jsonString = responseBody.string();  // 只能讀一次
-                                                                                                                    res = new Gson().fromJson(jsonString, SandcoreWorkOrderRes.class);
-//                                                                        Log.d("debug", "response.body().string():"+jsonString);
-                                                                                                                }
-                                                                                                                if (res.WorkStatus.equals("OK"))
-                                                                                                                    Toast.makeText(MainActivity.this, "執行成功", Toast.LENGTH_LONG).show();
-                                                                                                                else
-                                                                                                                    Toast.makeText(MainActivity.this, res.ErrorMsg, Toast.LENGTH_LONG).show();
-                                                                                                            } catch (Exception e) {
-                                                                                                                Toast.makeText(MainActivity.this, e.toString() + e.getStackTrace(), Toast.LENGTH_LONG).show();
-                                                                                                            }
-                                                                                                        }
-                                                                                                    }
-                                                                                            );
-                                                                                            GetData();
-                                                                                        } catch (Exception ex) {
-                                                                                            Log.e("ReportWorkError", ex.toString() + ex.getStackTrace());
-                                                                                        }
-                                                                                    }
-                                                                                });
-                                                                            }
-                                                                        }
+                                                            public void onFailure(@NonNull Call call, @NonNull IOException e) {
+                                                                ((MainActivity) v.getContext()).runOnUiThread(
+                                                                        () -> Toast.makeText(MainActivity.this, e.toString() + e.getStackTrace(), Toast.LENGTH_LONG).show()
                                                                 );
                                                             }
-                                                        })
-                                                        .setNegativeButton("取消", new DialogInterface.OnClickListener() {
+
                                                             @Override
-                                                            public void onClick(DialogInterface dialog, int which) {
-
-                                                            }
-                                                        }).show();;//.setTitle("合模維護的下模編號與造模維護的編號不同，是否要更新?");
-                                            }
-                                        } else {
-                                            String[] workOrderArr = workOrderList.get(index - 1).split("-");
-                                            Request request = model.UploadSfcData(workOrderArr, gradingData, index, input.getText().toString(), flaskInput.getText().toString());
-                                            Call call = okHttpClient.newCall(request);
-                                            call.enqueue(new Callback() {
-                                                @Override
-                                                public void onFailure(@NonNull Call call, @NonNull IOException e) {
-                                                    ((MainActivity) v.getContext()).runOnUiThread(
-                                                            new Runnable() {
-                                                                @Override
-                                                                public void run() {
-                                                                    Toast.makeText(MainActivity.this, e.toString() + e.getStackTrace(), Toast.LENGTH_LONG).show();
-                                                                }
-                                                            }
-                                                    );
-                                                }
-
-                                                @Override
-                                                public void onResponse(@NonNull Call call, @NonNull Response response) throws IOException {
-                                                    try {
-                                                        ((MainActivity) v.getContext()).runOnUiThread(
-                                                                new Runnable() {
-                                                                    @Override
-                                                                    public void run() {
-                                                                        ResponseBody responseBody = response.body();
-                                                                        SandcoreWorkOrderRes res = new SandcoreWorkOrderRes();
-                                                                        try {
-                                                                            if (responseBody != null) {
-                                                                                String jsonString = responseBody.string();  // 只能讀一次
-                                                                                res = new Gson().fromJson(jsonString, SandcoreWorkOrderRes.class);
+                                                            public void onResponse(@NonNull Call call, @NonNull Response response) throws IOException {
+                                                                try {
+                                                                    ((MainActivity) v.getContext()).runOnUiThread(
+                                                                            () -> {
+                                                                                ResponseBody responseBody = response.body();
+                                                                                SandcoreWorkOrderRes res = new SandcoreWorkOrderRes();
+                                                                                try {
+                                                                                    if (responseBody != null) {
+                                                                                        String jsonString = responseBody.string();  // 只能讀一次
+                                                                                        res = new Gson().fromJson(jsonString, SandcoreWorkOrderRes.class);
 //                                                                        Log.d("debug", "response.body().string():"+jsonString);
+                                                                                    }
+                                                                                    if (res.WorkStatus.equals("OK"))
+                                                                                        Toast.makeText(MainActivity.this, "執行成功", Toast.LENGTH_LONG).show();
+                                                                                    else
+                                                                                        Toast.makeText(MainActivity.this, res.ErrorMsg, Toast.LENGTH_LONG).show();
+                                                                                } catch (
+                                                                                        Exception e) {
+                                                                                    Toast.makeText(MainActivity.this, e+ Arrays.toString(e.getStackTrace()), Toast.LENGTH_LONG).show();
+                                                                                }
                                                                             }
-                                                                            if (res.WorkStatus.equals("OK"))
-                                                                                Toast.makeText(MainActivity.this, "執行成功", Toast.LENGTH_LONG).show();
-                                                                            else
-                                                                                Toast.makeText(MainActivity.this, res.ErrorMsg, Toast.LENGTH_LONG).show();
-                                                                        } catch (Exception e) {
-                                                                            Toast.makeText(MainActivity.this, e.toString() + e.getStackTrace(), Toast.LENGTH_LONG).show();
-                                                                        }
-                                                                    }
+                                                                    );
+                                                                    GetData();
+                                                                } catch (
+                                                                        Exception ex) {
+                                                                    Log.e("ReportWorkError", ex + Arrays.toString(ex.getStackTrace()));
                                                                 }
-                                                        );
-                                                        GetData();
-                                                    } catch (Exception ex) {
-                                                        Log.e("ReportWorkError", ex.toString() + ex.getStackTrace());
+                                                            }
+                                                        });
                                                     }
-                                                }
-                                            });
-                                        }
-                                    } catch (Exception ex){
-                                        ((MainActivity)v.getContext()).runOnUiThread(
-                                                new Runnable() {
-                                                    @Override
-                                                    public void run() {
-                                                        Toast.makeText(MainActivity.this, ex.toString()+ex.getStackTrace(), Toast.LENGTH_LONG).show();
-                                                    }
-                                                }
+                                            ))
+                                            .setNegativeButton("取消", (dialog2, which2) -> {
+
+                                            }).show();
+                                }
+                            } else {
+                                String[] workOrderArr = workOrderList.get(index - 1).split("-");
+                                Request request = model.UploadSfcData(workOrderArr, gradingData, index, input.getText().toString(), flaskInput.getText().toString());
+                                Call call = okHttpClient.newCall(request);
+                                call.enqueue(new Callback() {
+                                    @Override
+                                    public void onFailure(@NonNull Call call, @NonNull IOException e) {
+                                        ((MainActivity) v.getContext()).runOnUiThread(
+                                                () -> Toast.makeText(MainActivity.this, e.toString() + e.getStackTrace(), Toast.LENGTH_LONG).show()
                                         );
                                     }
-                                }
-                            })
-                            .setNegativeButton("取消", null)
-                            .show();;
-                }
-            });
+
+                                    @Override
+                                    public void onResponse(@NonNull Call call, @NonNull Response response) throws IOException {
+                                        try {
+                                            ((MainActivity) v.getContext()).runOnUiThread(
+                                                    () -> {
+                                                        ResponseBody responseBody = response.body();
+                                                        SandcoreWorkOrderRes res = new SandcoreWorkOrderRes();
+                                                        try {
+                                                            if (responseBody != null) {
+                                                                String jsonString = responseBody.string();  // 只能讀一次
+                                                                res = new Gson().fromJson(jsonString, SandcoreWorkOrderRes.class);
+//                                                                        Log.d("debug", "response.body().string():"+jsonString);
+                                                            }
+                                                            if (res.WorkStatus.equals("OK"))
+                                                                Toast.makeText(MainActivity.this, "執行成功", Toast.LENGTH_LONG).show();
+                                                            else
+                                                                Toast.makeText(MainActivity.this, res.ErrorMsg, Toast.LENGTH_LONG).show();
+                                                        } catch (Exception e) {
+                                                            Toast.makeText(MainActivity.this, e + Arrays.toString(e.getStackTrace()), Toast.LENGTH_LONG).show();
+                                                        }
+                                                    }
+                                            );
+                                            GetData();
+                                        } catch (Exception ex) {
+                                            Log.e("ReportWorkError", ex + Arrays.toString(ex.getStackTrace()));
+                                        }
+                                    }
+                                });
+                            }
+                        } catch (Exception ex) {
+                            ((MainActivity) v.getContext()).runOnUiThread(
+                                    () -> Toast.makeText(MainActivity.this, ex + Arrays.toString(ex.getStackTrace()), Toast.LENGTH_LONG).show()
+                            );
+                        }
+                    })
+                    .setNegativeButton("取消", null)
+                    .show();
+                });
+            }
             for (int j = 0; j < gradingData.get(0).size(); j++) {
                 // 4) create textView
 
@@ -567,10 +554,6 @@ public class MainActivity extends AppCompatActivity {
         return tableLayout;
     }
 
-    public void logout(View view) {
-        Intent intent = new Intent(this, LoginActivity.class);
-        startActivity(intent);
-    }
     /**
      * 左上角的菜单被点击时调用到
      */

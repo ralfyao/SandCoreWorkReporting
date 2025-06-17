@@ -58,6 +58,7 @@ public class LoginActivity extends AppCompatActivity {
                 showLoading(true);
                 try {
                     Request request = model.Login(usernameEditText.getText().toString().trim());
+                    usernameEditText.setText("");
                     Call call = okHttpClient.newCall(request);
                     call.enqueue(new Callback() {
                         @Override

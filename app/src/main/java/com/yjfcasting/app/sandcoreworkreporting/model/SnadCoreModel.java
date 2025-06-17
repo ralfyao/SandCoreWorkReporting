@@ -50,7 +50,7 @@ public class SnadCoreModel {
         Request request = null;
         if (!isManager) {
             if (workGroup == null || workGroup.indexOf("砂心") != -1) {
-                request = Utility.composeRequest("/api/LoadSandCoreData")
+                request = Utility.composeRequest("/api/LoadSandCoreData?sandCoreGroup="+deptName)
                         .get()
                         .build();
             } else {
@@ -69,5 +69,23 @@ public class SnadCoreModel {
         }
         return request;
     }
-
+    public Request GetDriverSandCoreMoldList(String driver){
+        FormBody body = new FormBody.Builder()
+                .add("driver", driver)
+                .build();
+        return Utility.composeRequest("/api/GetSandCoreMoldDispatchList?driver="+driver)
+                .post(body)
+                .build();
+    }
+    public Request UpdateReceiveCompFlag(String WorkOrder, String action, int isReceive){
+        Integer newReceive = new Integer(isReceive);
+        FormBody body = new FormBody.Builder()
+                .add("WorkOrder", WorkOrder)
+                .add("Action", action)
+                .add("IsReceiveComplete", newReceive.toString())
+                .build();
+        return Utility.composeRequest("/api/UpdateSandCoreMoldDriveRecvComp")
+                .post(body)
+                .build();
+    }
 }

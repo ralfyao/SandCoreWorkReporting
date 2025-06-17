@@ -11,4 +11,5 @@
     <color name="atsc_black_bg">#0d1720</color>
     <color name="atsc_color_light_grey">#606a82</color>
     <color name="menu_item_selected_bg">#10ffffff</color>
+    <color name="my_light_primary">#FF0E74BA</color>
 </resources>

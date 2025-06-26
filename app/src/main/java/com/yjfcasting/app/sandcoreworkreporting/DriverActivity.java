@@ -7,12 +7,10 @@ import android.graphics.Color;
 import android.graphics.Typeface;
 import android.os.Bundle;
 import android.os.Handler;
-import android.text.InputType;
 import android.util.Log;
 import android.view.Gravity;
 import android.view.View;
 import android.widget.CheckBox;
-import android.widget.EditText;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TableLayout;
@@ -22,7 +20,6 @@ import android.widget.Toast;
 
 import androidx.activity.EdgeToEdge;
 import androidx.annotation.NonNull;
-import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.cardview.widget.CardView;
 import androidx.core.content.res.ResourcesCompat;
@@ -43,13 +40,11 @@ import com.google.gson.Gson;
 import com.yjfcasting.app.sandcoreworkreporting.model.SnadCoreModel;
 import com.yjfcasting.app.sandcoreworkreporting.ui.login.LoginActivity;
 import com.yjfcasting.app.sandcoreworkreporting.vo.SandCoreMoldDriveRes;
-import com.yjfcasting.app.sandcoreworkreporting.vo.SandcoreWorkOrderRes;
 
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Timer;
-import java.util.TimerTask;
 import java.util.concurrent.TimeUnit;
 
 import okhttp3.Call;

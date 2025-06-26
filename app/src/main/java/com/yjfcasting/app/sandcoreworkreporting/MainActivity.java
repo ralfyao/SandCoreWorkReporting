@@ -47,8 +47,11 @@ import com.yjfcasting.app.sandcoreworkreporting.ui.login.LoginActivity;
 import com.yjfcasting.app.sandcoreworkreporting.vo.SandcoreWorkOrderRes;
 
 import java.io.IOException;
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.Timer;
 import java.util.TimerTask;
@@ -246,7 +249,7 @@ public class MainActivity extends AppCompatActivity {
                     gradingData.clear();
                     String sftStation = "";
 //                    if (res.resultList.size() > 0)
-                        sftStation = departmentType.length()>2?departmentType.substring(0, 2):departmentType;
+                        sftStation = departmentType.length()>2?departmentType.substring(0, 2):departmentName.length()>2?departmentName.substring(0, 2):"";
                     ArrayList<String> columns = initColumns(sftStation);
                     gradingData.add(columns);
                     workOrderList.clear();
@@ -255,22 +258,74 @@ public class MainActivity extends AppCompatActivity {
                         for (int i = 0; i < res.resultList.size(); i++) {
                             dataContainer = new ArrayList<>();
                             if (!isManager) { // 非管理者列表
-                                dataContainer.add(res.resultList.get(i).SftStatus + "\r\n");
-                                dataContainer.add((i + 1) + "\r\n");
-                                dataContainer.add(res.resultList.get(i).SandCorePlanStartDate + "\r\n");
-                                if (!res.resultList.get(i).SftStation.equals("造模") && !res.resultList.get(i).SftStation.equals("合模"))
-                                    dataContainer.add(res.resultList.get(i).MoldingGroup + "\r\n");
-                                dataContainer.add(res.resultList.get(i).MoldingPlanStartDate + "\r\n");
-                                if (!res.resultList.get(i).SftStation.equals("合模"))
-                                    dataContainer.add(res.resultList.get(i).AssemblingGroup + "\r\n");
-                                dataContainer.add(res.resultList.get(i).ItemNo + "\r\n");
-                                dataContainer.add(
-                                        (departmentType.equals("砂心") ? res.resultList.get(i).SandCoreWorkOrder : res.resultList.get(i).WorkOrder)
-                                                + "\r\n" + (res.resultList.get(i).ItemDesc.length() > 9 ? res.resultList.get(i).ItemDesc.substring(0, 9) : res.resultList.get(i).ItemDesc));
-                                dataContainer.add((res.resultList.get(i).ThisWeekQuantity) + "\r\n");
-                                dataContainer.add((res.resultList.get(i).UnitWeight) + "\r\n");
-                                if (!res.resultList.get(i).SftStation.equals("合模"))
-                                    dataContainer.add(res.resultList.get(i).SandCoreLocation + "\r\n");
+                                switch(res.resultList.get(i).SftStation)
+                                {
+                                    case "砂心":
+                                        dataContainer.add(res.resultList.get(i).SftStatus + "\r\n");                                            // 報工狀態
+                                        dataContainer.add((i + 1) + "\r\n");                                                                    // 序號
+                                        dataContainer.add(res.resultList.get(i).SandCorePlanStartDate + "\r\n");                                // 砂心預計生產日
+                                        dataContainer.add(res.resultList.get(i).MoldingGroup + "\r\n");                                         // 外模組別
+                                        dataContainer.add(res.resultList.get(i).MoldingPlanStartDate + "\r\n");                                 // 外模預計生產日
+                                        dataContainer.add(res.resultList.get(i).AssemblingGroup + "\r\n");                                      // 合模組別
+                                        dataContainer.add(res.resultList.get(i).ItemNo + "\r\n");                                               // 產品代號
+                                        dataContainer.add(                                                                                      // 製令品名規格
+                                                (departmentType.equals("砂心") ? res.resultList.get(i).SandCoreWorkOrder : res.resultList.get(i).WorkOrder)
+                                                        + "\r\n" + (res.resultList.get(i).ItemDesc.length() > 9 ? res.resultList.get(i).ItemDesc.substring(0, 9) : res.resultList.get(i).ItemDesc));
+                                        dataContainer.add((res.resultList.get(i).ThisWeekQuantity) + "\r\n");                                   // 本週數量
+                                        dataContainer.add((res.resultList.get(i).UnitWeight) + "\r\n");                                         // 單重
+                                        dataContainer.add(res.resultList.get(i).SandCoreLocation + "\r\n");                                     // 砂心存放位置
+                                        break;
+                                    case "造模":
+                                        dataContainer.add(res.resultList.get(i).SftStatus + "\r\n");                                    // 報工狀態
+                                        dataContainer.add((i + 1) + "\r\n");                                                            // 序號
+                                        dataContainer.add(res.resultList.get(i).SandCoreEndDate + "\r\n");                              // 砂心完成日
+                                        dataContainer.add(res.resultList.get(i).MoldingGroup + "\r\n");                                 // 外模組別
+                                        dataContainer.add(res.resultList.get(i).MoldingPlanStartDate + "\r\n");                         // 外模預計生產日
+                                        dataContainer.add(res.resultList.get(i).AssemblingGroup + "\r\n");                              // 合模組別
+                                        dataContainer.add(res.resultList.get(i).ItemNo + "\r\n");                                       // 產品代號
+                                        dataContainer.add(res.resultList.get(i).Material + "\r\n");                                     // 材質
+//                                        dataContainer.add(res.resultList.get(i).FlaskId + "\r\n");                                      // 鐵斗
+                                        dataContainer.add(                                                                              // 製令品名規格
+                                                (departmentType.equals("砂心") ? res.resultList.get(i).SandCoreWorkOrder : res.resultList.get(i).WorkOrder)
+                                                        + "\r\n" + (res.resultList.get(i).ItemDesc.length() > 9 ? res.resultList.get(i).ItemDesc.substring(0, 9) : res.resultList.get(i).ItemDesc));
+                                        dataContainer.add((res.resultList.get(i).ThisWeekQuantity) + "\r\n");                           // 本週數量
+                                        dataContainer.add((res.resultList.get(i).UnitWeight) + "\r\n");                                 // 單重
+                                        dataContainer.add((res.resultList.get(i).DispatchStatus) + "\r\n");                             // 模具到站狀態
+                                        break;
+                                    case "合模":
+                                        dataContainer.add(res.resultList.get(i).SftStatus + "\r\n");                                    // 報工狀態
+                                        dataContainer.add((i + 1) + "\r\n");                                                            // 序號
+                                        dataContainer.add(res.resultList.get(i).MoldingEndDate + "\r\n");                               // 外模完成日
+                                        dataContainer.add(res.resultList.get(i).MoldingGroup + "\r\n");                                 // 外模組別
+                                        dataContainer.add(res.resultList.get(i).AssemblingGroup + "\r\n");                              // 合模組別
+                                        dataContainer.add(res.resultList.get(i).ItemNo + "\r\n");                                       // 產品代號
+                                        dataContainer.add(res.resultList.get(i).Material + "\r\n");                                     // 材質
+                                        dataContainer.add(res.resultList.get(i).BottomFlask + "\r\n");                                      // 鐵斗
+                                        dataContainer.add(                                                                              // 製令品名規格
+                                                (departmentType.equals("砂心") ? res.resultList.get(i).SandCoreWorkOrder : res.resultList.get(i).WorkOrder)
+                                                        + "\r\n" + (res.resultList.get(i).ItemDesc.length() > 9 ? res.resultList.get(i).ItemDesc.substring(0, 9) : res.resultList.get(i).ItemDesc));
+                                        dataContainer.add((res.resultList.get(i).ThisWeekQuantity) + "\r\n");                           // 本週數量
+                                        dataContainer.add((res.resultList.get(i).UnitWeight) + "\r\n");                                 // 單重
+                                        dataContainer.add((res.resultList.get(i).DispatchStatus) + "\r\n");                             // 模具到站狀態
+                                        break;
+                                    case "電爐":
+                                        dataContainer.add(res.resultList.get(i).SftStatus + "\r\n");                                    // 報工狀態
+                                        dataContainer.add((i + 1) + "\r\n");                                                            // 序號
+                                        dataContainer.add(res.resultList.get(i).AssemblingEndDate + "\r\n");                            // 合模完成日
+                                        dataContainer.add(res.resultList.get(i).AssemblingGroup + "\r\n");                              // 合模組別
+                                        dataContainer.add(res.resultList.get(i).ItemNo + "\r\n");                                       // 產品代號
+                                        dataContainer.add(res.resultList.get(i).Material + "\r\n");                                     // 材質
+                                        dataContainer.add(                                                                              // 製令品名規格
+                                                (departmentType.equals("砂心") ? res.resultList.get(i).SandCoreWorkOrder : res.resultList.get(i).WorkOrder)
+                                                        + "\r\n" + (res.resultList.get(i).ItemDesc.length() > 9 ? res.resultList.get(i).ItemDesc.substring(0, 9) : res.resultList.get(i).ItemDesc));
+                                        dataContainer.add((res.resultList.get(i).ThisWeekQuantity) + "\r\n");                           // 本週數量
+                                        dataContainer.add((res.resultList.get(i).UnitWeight) + "\r\n");                                 // 單重
+
+                                        dataContainer.add(res.resultList.get(i).BottomFlask + "\r\n");                                  // 鐵斗
+                                        dataContainer.add((res.resultList.get(i).DispatchStatus) + "\r\n");                             // 模具到站狀態
+                                        break;
+                                }
+
                             } else { // 管理者列表
                                 dataContainer.add(res.resultList.get(i).SftStation + "\r\n" + res.resultList.get(i).SftStatus);
                                 dataContainer.add((i + 1) + "\r\n");
@@ -327,20 +382,65 @@ public class MainActivity extends AppCompatActivity {
             columns.add("單重\r\n");
             columns.add("砂心存放\r\n位置");
         } else {
-            columns.add("報工狀態\r\n");
-            columns.add("序號\r\n");
-            columns.add("砂心預計\r\n生產日");
-            if (!SftStation.equals("造模") && !SftStation.equals("合模"))
-                columns.add("外模組別\r\n");
-            columns.add(SftStation + "預計\r\n生產日");
-            if (!SftStation.equals("合模"))
-                columns.add("合模組別\r\n");
-            columns.add("產品代號\r\n");
-            columns.add("製令品名\r\n規格");
-            columns.add("本週數量\r\n");
-            columns.add("單重\r\n");
-            if (!SftStation.equals("合模"))
-                columns.add("砂心存放\r\n位置");
+            switch(SftStation){
+                case "造模":
+                    columns.add("報工狀態\r\n");
+                    columns.add("序號\r\n");
+                    columns.add("砂心\r\n完成日");
+                    columns.add("外模組別\r\n");
+                    columns.add("外模預計\r\n生產日");
+                    columns.add("合模組別\r\n");
+                    columns.add("產品代號\r\n");
+                    columns.add("材質\r\n");
+//                    columns.add("鐵斗\r\n");
+                    columns.add("製令品名\r\n規格");
+                    columns.add("本週數量\r\n");
+                    columns.add("單重\r\n");
+                    columns.add("模具到站\r\n狀態");
+                    break;
+                case "合模":
+                    columns.add("報工狀態\r\n");
+                    columns.add("序號\r\n");
+                    columns.add("外模\r\n完成日");
+                    columns.add("外模組別\r\n");
+                    columns.add("合模組別\r\n");
+                    columns.add("產品代號\r\n");
+                    columns.add("材質\r\n");
+                    columns.add("鐵斗\r\n");
+                    columns.add("製令品名\r\n規格");
+                    columns.add("本週數量\r\n");
+                    columns.add("單重\r\n");
+                    columns.add("模具到站\r\n狀態");
+                    break;
+                case "電爐":
+                case "熔解":
+                    columns.add("報工狀態\r\n");
+                    columns.add("序號\r\n");
+                    columns.add("合模完成日\r\n");
+                    columns.add("合模組別\r\n");
+                    columns.add("產品代號\r\n");
+                    columns.add("材質\r\n");
+                    columns.add("製令品名\r\n規格");
+                    columns.add("本週數量\r\n");
+                    columns.add("單重\r\n");
+                    columns.add("鐵斗\r\n");
+                    columns.add("模具到站\r\n狀態");
+                    break;
+            }
+//            columns.add("報工狀態\r\n");
+//            columns.add("序號\r\n");
+//            columns.add("砂心預計\r\n生產日");
+//            if (!SftStation.equals("造模") && !SftStation.equals("合模"))
+//                columns.add("外模組別\r\n");
+//            columns.add(SftStation + "預計\r\n生產日");
+//            if (!SftStation.equals("合模"))
+//                columns.add("合模組別\r\n");
+//            columns.add("產品代號\r\n");
+//            columns.add("製令品名\r\n規格");
+//            columns.add("本週數量\r\n");
+//            columns.add("單重\r\n");
+//            if (!SftStation.equals("合模"))
+//                columns.add("砂心存放\r\n位置");
         }
         return columns;
     }
@@ -382,7 +482,7 @@ public class MainActivity extends AppCompatActivity {
                         flaskId = (String) hm.get(workOrderList.get(index - 1));
                     }
                     final EditText flaskInput = new EditText(MainActivity.this);
-                    if (departmentType.equals("造模") || departmentType.equals("合模")) {
+                    if (departmentType.equals("造模") || departmentType.equals("合模") || departmentName.indexOf("熔解") != -1) {// 造模、合模、澆注均需要可以改鐵斗號碼
                         flaskInput.setHint("請輸入鐵斗");
                         flaskInput.setText(flaskId);
                         flaskInput.setInputType(InputType.TYPE_CLASS_NUMBER);
@@ -512,6 +612,7 @@ public class MainActivity extends AppCompatActivity {
                     .show();
                 });
             }
+            // 填充表格
             for (int j = 0; j < gradingData.get(0).size(); j++) {
                 // 4) create textView
 
@@ -524,6 +625,28 @@ public class MainActivity extends AppCompatActivity {
                 textView.setPadding(0, 20, 0, 10);
                 textView.setText(gradingData.get(i).get(j));
                 textView.setTextColor(Color.BLACK);
+                // 合模如果造模完成後超過2天，show紅色字體
+                Log.d("DEBUG:",gradingData.get(0).get(2));
+                if (gradingData.get(0).get(2).indexOf("外模") != -1) {// 合模會show外模完成日，以此作為條件判斷
+                    Date toDay = new Date();
+                    if (i != 0) {
+                        SimpleDateFormat sdf = new SimpleDateFormat("yyyyMMdd");
+                        Date moldCompDate = null;
+                        try {
+                            moldCompDate = sdf.parse(gradingData.get(i).get(2).toString());
+
+                            Log.d("DEBUG:", toDay.toString());
+                            Log.d("DEBUG:", moldCompDate.toString());
+                            if (((toDay.getTime() - moldCompDate.getTime()) / (1000 * 60 * 60 * 24)) > 2){
+                                if (gradingData.get(i).get(0).toString().indexOf("未進站") != -1) {
+                                    textView.setTextColor(Color.RED);
+                                }
+                            }
+                        } catch (ParseException e) {
+                            throw new RuntimeException(e);
+                        }
+                    }
+                }
                 if (i == 0) {
                     textView.setBackgroundColor(Color.parseColor( "#aeaeae"));
                 } else {

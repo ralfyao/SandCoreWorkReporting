@@ -76,8 +76,10 @@ public class DriverActivity extends AppCompatActivity {
                     new HttpLoggingInterceptor().setLevel(HttpLoggingInterceptor.Level.BASIC)
             ).connectTimeout(150, TimeUnit.SECONDS) // 連線超時
             .writeTimeout(150, TimeUnit.SECONDS)   // 傳送資料超時
-            .readTimeout(300, TimeUnit.SECONDS) .build();
+            .readTimeout(300, TimeUnit.SECONDS)
+            .build();
     private SwipeRefreshLayout swipeRefreshLayout;
+    private int CHECKBOX_SIZE = 95;
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -121,14 +123,6 @@ public class DriverActivity extends AppCompatActivity {
                 }, 1500); // 模擬 1.5 秒
             }
         });
-        // 每隔5秒鐘抓取資料
-//        mTimer = new Timer();
-//        mTimer.scheduleAtFixedRate(new TimerTask() {
-//            @Override
-//            public void run() {
-//                GetData();
-//            }
-//        }, 0, 5000);
     }
     private void GetData() {
         Request request = model.GetDriverSandCoreMoldList(reportWorkingNumber);
@@ -161,6 +155,7 @@ public class DriverActivity extends AppCompatActivity {
                 if (res != null && res.WorkStatus.equals("OK")) {
                     ArrayList<String> dataContainer = new ArrayList<>();
                     for (int i = 0; i < res.resultList.size(); i++) {
+                        dataContainer = new ArrayList<>();
                         dataContainer.add(res.resultList.get(i).WorkOrder + "\r\n");
                         dataContainer.add(res.resultList.get(i).Seqnence + "\r\n");
                         dataContainer.add(res.resultList.get(i).CustomerName + "\r\n");
@@ -270,8 +265,8 @@ public class DriverActivity extends AppCompatActivity {
         columns.add("品名\r\n");
         columns.add("起始區\r\n");
         columns.add("迄點區\r\n");
-        columns.add("到站\r\n");
-        columns.add("歸還\r\n");
+        columns.add("到站\r\nComplete");
+        columns.add("歸還\r\nReturn");
         return columns;
     }
     private void initGridViewWData(ArrayList<ArrayList<String>> dataResult){
@@ -340,7 +335,6 @@ public class DriverActivity extends AppCompatActivity {
                     TextView textView = new TextView(this);
                     textView.setGravity(Gravity.CENTER);
                     textView.setTextSize(9);
-//                    Typeface typeface = ResourcesCompat.getFont(this, R.font.my_font_bold);
                     textView.setTypeface(typeface);
                     textView.setBackgroundResource(R.drawable.cell_border);
                     textView.setPadding(0, 20, 0, 10);
@@ -355,7 +349,8 @@ public class DriverActivity extends AppCompatActivity {
                         CheckBox cbReceive = new CheckBox(this);
                         cbReceive.setGravity(Gravity.CENTER);
                         cbReceive.setTextSize(9);
-                        cbReceive.setText("到站/Receive");
+                        cbReceive.setWidth(CHECKBOX_SIZE);
+                        cbReceive.setHeight(CHECKBOX_SIZE);
                         cbReceive.setTypeface(typeface);
                         cbReceive.setBackgroundResource(R.drawable.cell_border);
                         Log.d("Flag 1", gradingData.get(i).get(gradingData.get(0).size() - 2) );
@@ -371,7 +366,6 @@ public class DriverActivity extends AppCompatActivity {
                         cbReceive.setOnClickListener(v ->{
                             int recFlag = cbReceive.isChecked()?1:0;
                             setReceivedReturnFlag(WorkOrder, "REC", recFlag);
-//                            Log.d("WorkOrder", )
                         });
                         cardView.addView(cbReceive);
                     }
@@ -379,6 +373,8 @@ public class DriverActivity extends AppCompatActivity {
                         CheckBox cbReturn = new CheckBox(this);
                         cbReturn.setGravity(Gravity.CENTER);
                         cbReturn.setTextSize(9);
+                        cbReturn.setWidth(CHECKBOX_SIZE);
+                        cbReturn.setHeight(CHECKBOX_SIZE);
                         cbReturn.setTypeface(typeface);
                         cbReturn.setBackgroundResource(R.drawable.cell_border);
                         Log.d("Flag 2", gradingData.get(i).get(gradingData.get(0).size() - 1) );
@@ -390,7 +386,7 @@ public class DriverActivity extends AppCompatActivity {
                         } else {
                             cbReturn.setChecked(false);
                         }
-                        cbReturn.setText("歸還/Return");
+//                        cbReturn.setText("歸還");
                         String WorkOrder = gradingData.get(i).get(0).replace("\r\n","");
                         cbReturn.setOnClickListener(v ->{
                             int retFlag = cbReturn.isChecked()?1:0;

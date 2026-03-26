@@ -63,7 +63,7 @@ public class LoginActivity extends AppCompatActivity {
                     call.enqueue(new Callback() {
                         @Override
                         public void onFailure(@NonNull Call call, @NonNull IOException e) {
-
+                            ;
                         }
 
                         @Override
@@ -78,6 +78,7 @@ public class LoginActivity extends AppCompatActivity {
                                 intent.putExtra("empname", responseObj.result.EmployeeName);
                                 intent.putExtra("depttype", responseObj.result.DeptType);
                                 intent.putExtra("ismanager", responseObj.result.IsManager);
+                                intent.putExtra("alternatedeptname", responseObj.result.AlternateDeptName);
                                 startActivity(intent);
                             } else {
                                 if (responseObj.WorkStatus.equals("Fail")){

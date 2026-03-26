@@ -4,13 +4,11 @@ import android.util.Log;
 
 import androidx.annotation.NonNull;
 
-import com.yjfcasting.app.sandcoreworkreporting.Constant;
 import com.yjfcasting.app.sandcoreworkreporting.Utility;
 
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
-import java.util.concurrent.TimeUnit;
 
 import okhttp3.FormBody;
 import okhttp3.Request;
@@ -24,6 +22,7 @@ public class SnadCoreModel {
                 .add("Type", gradingData.get(index).get(0).indexOf("未進站") != -1 ? "in" : "out")
                 .add("UserCode", userCode)
                 .add("Sequence", "0")
+                .add("AppVersion", "1.0")
                 .add("TransferDate", new SimpleDateFormat("yyyyMMdd").format(new Date())).build();
         if (flaskId != null && !flaskId.equals("")){
             body = new FormBody.Builder()
@@ -32,6 +31,7 @@ public class SnadCoreModel {
                     .add("Type", gradingData.get(index).get(0).indexOf("未進站") != -1 ? "in" : "out")
                     .add("UserCode", userCode)
                     .add("Sequence", "0")
+                    .add("AppVersion", "1.0")
                     .add("FlaskID", flaskId)
                     .add("BottomFlaskID", flaskId)
                     .add("TransferDate", new SimpleDateFormat("yyyyMMdd").format(new Date())).build();
@@ -44,9 +44,10 @@ public class SnadCoreModel {
         return request;
     }
     // 取得砂心列表
-    public Request GetSandCoreList(String workGroup, String deptName, Boolean isManager){
+    public Request GetSandCoreList(String workGroup, String deptName, String alternateDeptName, Boolean isManager){
         Log.d("debug", "workGroup:"+workGroup);
         Log.d("debug", "deptName:"+deptName);
+        Log.d("debug", "alternateDeptName:"+alternateDeptName);
         Request request = null;
         if (!isManager) {
             if (workGroup == null || workGroup.indexOf("砂心") != -1) {
@@ -57,6 +58,7 @@ public class SnadCoreModel {
                 FormBody body = new FormBody.Builder()
                         .add("workGroup", workGroup)
                         .add("deptName", deptName)
+                        .add("alternateDeptName", alternateDeptName)
                         .build();
                 request = Utility.composeRequest("/api/LoadSfteData")
                         .post(body)
@@ -77,15 +79,57 @@ public class SnadCoreModel {
                 .post(body)
                 .build();
     }
-    public Request UpdateReceiveCompFlag(String WorkOrder, String action, int isReceive){
+    public Request UpdateReceiveCompFlag(String workOrder, String itemNo, boolean actioned, String reportWorkingNumber, String location, String endLocation, String action, int isReceive){
         Integer newReceive = new Integer(isReceive);
         FormBody body = new FormBody.Builder()
-                .add("WorkOrder", WorkOrder)
+                .add("WorkOrder", workOrder)
                 .add("Action", action)
+                .add("ItemNo", itemNo)
+                .add("ReportWorkingNumber", reportWorkingNumber)
+                .add("Location", location)
+                .add("EndLocation", endLocation)
                 .add("IsReceiveComplete", newReceive.toString())
                 .build();
         return Utility.composeRequest("/api/UpdateSandCoreMoldDriveRecvComp")
                 .post(body)
                 .build();
+    }
+
+    public Request GetBRParamValueReq(String workOrderHead, String workOrder) {
+        FormBody body = new FormBody.Builder()
+                .add("workOrderHead", workOrderHead)
+                .add("workOrder", workOrder)
+                .build();
+        return Utility.composeRequest("/api/GetBRParamData")
+                .post(body)
+                .build();
+    }
+
+    public Request GetStockerList() {
+        return Utility.composeRequest("/api/GetWHStockList")
+                .get()
+                .build();
+    }
+
+    public Request GetWareHouseList() {
+        return Utility.composeRequest("/api/GetWareHouseList")
+                .get()
+                .build();
+    }
+
+    public Request RepairFlask(String[] workOrderArr, ArrayList<ArrayList<String>> gradingData, int index, String userCode, String flaskId) {
+        FormBody body = new FormBody.Builder()
+                .add("ProductionOrderHead", workOrderArr[0])
+                .add("ProductionOrder",  workOrderArr[1])
+                .add("Type", gradingData.get(index).get(0).indexOf("未進站") != -1 ? "in" : "out")
+                .add("UserCode", userCode)
+                .add("Sequence", "0")
+                .add("FlaskID", flaskId)
+                .add("BottomFlaskID", flaskId)
+                .add("TransferDate", new SimpleDateFormat("yyyyMMdd").format(new Date())).build();
+        Request request = Utility.composeRequest("/api/SFCRepairFlask")
+                .post(body)
+                .build();
+        return request;
     }
 }

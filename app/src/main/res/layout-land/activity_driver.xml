@@ -12,12 +12,6 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         tools:context=".DriverActivity">
-
-        <WebView
-            android:id="@+id/myWebView"
-            android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:layout_weight="1" />
         <androidx.swiperefreshlayout.widget.SwipeRefreshLayout
             android:id="@+id/swipe_layout"
             android:layout_width="match_parent"
@@ -47,6 +41,7 @@
                     android:id="@+id/custom_toolbar"
                     android:layout_width="match_parent"
                     android:layout_height="?attr/actionBarSize">
+
                     <ImageView
                         android:id="@+id/custom_hamburger_icon"
                         android:layout_width="44dp"
@@ -62,6 +57,7 @@
                         android:text=""
                         android:textColor="#FFFFFF"
                         android:textSize="18sp" />
+
                 </androidx.appcompat.widget.Toolbar>
                 <fragment
                     android:id="@+id/nav_host_fragment"
@@ -69,8 +65,7 @@
                     android:layout_width="match_parent"
                     android:layout_height="0dp"
                     android:layout_weight="1"
-                    app:navGraph="@navigation/nav_graph">
-                </fragment>
+                    app:navGraph="@navigation/nav_graph" />
             </LinearLayout>
         </ScrollView>
         </androidx.swiperefreshlayout.widget.SwipeRefreshLayout>

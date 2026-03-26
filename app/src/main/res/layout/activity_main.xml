@@ -3,15 +3,15 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:id="@+id/drawerLayout"
-    android:layout_width="match_parent"
-    android:layout_height="match_parent">
+    android:layout_width="fill_parent"
+    android:layout_height="fill_parent">
     <androidx.constraintlayout.widget.ConstraintLayout
         xmlns:android="http://schemas.android.com/apk/res/android"
         xmlns:app="http://schemas.android.com/apk/res-auto"
         xmlns:tools="http://schemas.android.com/tools"
         android:id="@+id/main"
-        android:layout_width="match_parent"
-        android:layout_height="match_parent"
+        android:layout_width="fill_parent"
+        android:layout_height="fill_parent"
         tools:context=".MainActivity">
         <androidx.swiperefreshlayout.widget.SwipeRefreshLayout
             android:id="@+id/swipe_layout"
@@ -32,49 +32,47 @@
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toTopOf="parent"
             app:layout_constraintVertical_bias="0.0">
+                <HorizontalScrollView
+                    android:layout_width="fill_parent"
+                    android:layout_height="fill_parent">
+                    <LinearLayout
+                    android:id="@+id/parentLayout"
+                    android:layout_width="fill_parent"
+                    android:layout_height="fill_parent"
+                    android:orientation="horizontal"
+                    tools:ignore="MissingConstraints">
+                    <androidx.appcompat.widget.Toolbar
+                        android:id="@+id/custom_toolbar"
+                        android:layout_width="match_parent"
+                        android:layout_height="?attr/actionBarSize">
+                        <ImageView
+                            android:id="@+id/custom_hamburger_icon"
+                            android:layout_width="44dp"
+                            android:layout_height="wrap_content"
+                            android:layout_marginStart="14dp"
+                            android:src="@drawable/icon_menu_n" />
 
-            <LinearLayout
-                android:id="@+id/parentLayout"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="vertical"
-                tools:ignore="MissingConstraints">
-                <androidx.appcompat.widget.Toolbar
-                    android:id="@+id/custom_toolbar"
-                    android:layout_width="match_parent"
-                    android:layout_height="?attr/actionBarSize">
-
-                    <ImageView
-                        android:id="@+id/custom_hamburger_icon"
-                        android:layout_width="44dp"
-                        android:layout_height="wrap_content"
-                        android:layout_marginStart="14dp"
-                        android:src="@drawable/icon_menu_n" />
-
-                    <TextView
-                        android:id="@+id/fragment_title"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginStart="16dp"
-                        android:text=""
-                        android:textColor="#FFFFFF"
-                        android:textSize="18sp" />
-
-                </androidx.appcompat.widget.Toolbar>
-
-                <fragment
-                    android:id="@+id/nav_host_fragment"
-                    android:name="androidx.navigation.fragment.NavHostFragment"
-                    android:layout_width="match_parent"
-                    android:layout_height="0dp"
-                    android:layout_weight="1"
-                    app:navGraph="@navigation/nav_graph" />
-            </LinearLayout>
-        </ScrollView>
+                        <TextView
+                            android:id="@+id/fragment_title"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginStart="16dp"
+                            android:text=""
+                            android:textColor="#FFFFFF"
+                            android:textSize="18sp" />
+                    </androidx.appcompat.widget.Toolbar>
+                    <fragment
+                        android:id="@+id/nav_host_fragment"
+                        android:name="androidx.navigation.fragment.NavHostFragment"
+                        android:layout_width="match_parent"
+                        android:layout_height="0dp"
+                        android:layout_weight="1"
+                        app:navGraph="@navigation/nav_graph" />
+                    </LinearLayout>
+                </HorizontalScrollView>
+            </ScrollView>
         </androidx.swiperefreshlayout.widget.SwipeRefreshLayout>
-
     </androidx.constraintlayout.widget.ConstraintLayout>
-    <!-- 左侧滑出的導航菜單 -->
     <com.google.android.material.navigation.NavigationView
         android:id="@+id/navigation_view"
         style="@style/MyNavigationViewStyle"

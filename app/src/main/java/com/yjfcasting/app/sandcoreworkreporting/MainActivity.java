@@ -2,18 +2,24 @@ package com.yjfcasting.app.sandcoreworkreporting;
 
 import static android.view.ViewGroup.LayoutParams.MATCH_PARENT;
 
+
+
 import android.content.Intent;
 import android.graphics.Color;
 import android.graphics.Typeface;
 import android.os.Bundle;
 import android.os.Handler;
 import android.text.InputType;
+import android.util.DisplayMetrics;
 import android.util.Log;
 import android.view.GestureDetector;
 import android.view.Gravity;
 import android.view.MotionEvent;
+import android.view.ScaleGestureDetector;
 import android.view.View;
+import android.widget.Button;
 import android.widget.EditText;
+import android.widget.HorizontalScrollView;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TableLayout;
@@ -42,8 +48,10 @@ import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 
 import com.google.android.material.navigation.NavigationView;
 import com.google.gson.Gson;
+import com.yjfcasting.app.sandcoreworkreporting.base.BaseActivity;
 import com.yjfcasting.app.sandcoreworkreporting.model.SnadCoreModel;
 import com.yjfcasting.app.sandcoreworkreporting.ui.login.LoginActivity;
+import com.yjfcasting.app.sandcoreworkreporting.vo.PROD_WorkOrderDispatch;
 import com.yjfcasting.app.sandcoreworkreporting.vo.SandcoreWorkOrderRes;
 
 import java.io.IOException;
@@ -64,22 +72,32 @@ import okhttp3.Response;
 import okhttp3.ResponseBody;
 import okhttp3.logging.HttpLoggingInterceptor;
 
-public class MainActivity extends AppCompatActivity {
+public class MainActivity extends BaseActivity {
+    private static final float TEXT_SIZE = 14;
     private ArrayList<ArrayList<String>> gradingData = new ArrayList<ArrayList<String>>();
     private final OkHttpClient okHttpClient = new OkHttpClient().newBuilder().addInterceptor(
             new HttpLoggingInterceptor().setLevel(HttpLoggingInterceptor.Level.BASIC)
     ).connectTimeout(150, TimeUnit.SECONDS) // 連線超時
     .writeTimeout(150, TimeUnit.SECONDS)   // 傳送資料超時
-    .readTimeout(300, TimeUnit.SECONDS) .build();
-//    private ArrayList<PROD_WorkOrderDispatch> data = new ArrayList<PROD_WorkOrderDispatch>();
+    .readTimeout(300, TimeUnit.SECONDS).build();
     private static ArrayList<String> workOrderList = new ArrayList<>();// 製令列表
     private Timer mTimer = null;
     private SnadCoreModel model = null;
+    private View zoomTarget;
+    private ScaleGestureDetector scaleDetector;
+    private GestureDetector gestureDetector;
+    private float scaleFactor = 1.0f;
+    private float translationX = 0f;
+    private float translationY = 0f;
+
+    private float maxScale = 3.0f;
+    private float minScale = 1.0f;
     private static String reportWorkingNumber = "";// 工號
     private static String flaskId = "";// 鐵斗編號
     private static String departmentNumber = "";// 部門代號
     private static String departmentType = "";// 部門別：造模、合模、砂心
     private static String departmentName = "";// 部門名稱
+    private static String alternateDeptName = "";// 第二線別名稱
     private static HashMap hm = new HashMap();// 製令-鐵斗的對應物件
     private static boolean isManager = false;// 是否為系統管理者
     private AppBarConfiguration appBarConfiguration;
@@ -91,7 +109,7 @@ public class MainActivity extends AppCompatActivity {
         EdgeToEdge.enable(this);
         this.setContentView(R.layout.activity_main);
         hm.clear();
-        ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.main), (v, insets) -> {
+        ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.parentLayout), (v, insets) -> {
             Insets systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars());
             v.setPadding(systemBars.left, systemBars.top, systemBars.right, systemBars.bottom);
             return insets;
@@ -104,15 +122,25 @@ public class MainActivity extends AppCompatActivity {
             departmentType = intent.getStringExtra("depttype");
             departmentName = intent.getStringExtra("deptname");
             isManager = intent.getBooleanExtra("ismanager", false);
+            alternateDeptName = intent.getStringExtra("alternatedeptname");
             Log.d("debug", "reportWorkingNumber:"+reportWorkingNumber);
             Log.d("debug", "departmentNumber:"+departmentNumber);
             Log.d("debug", "departmentType:"+departmentType);
             Log.d("debug", "departmentName:"+departmentName);
             Log.d("debug", "IsManager:"+isManager);
+            Log.d("debug", "IsManager:"+alternateDeptName);
         }
         model = new SnadCoreModel();
-        // 每隔5秒鐘抓取資料
-//        mTimer = new Timer();
+        zoomTarget = findViewById(R.id.parentLayout);
+
+        scaleDetector = new ScaleGestureDetector(this, new ScaleListener());
+        gestureDetector = new GestureDetector(this, new PanListener());
+
+        zoomTarget.setOnTouchListener((v, event) -> {
+            scaleDetector.onTouchEvent(event);
+            gestureDetector.onTouchEvent(event);
+            return true;
+        });
         GetData();
         swipeRefreshLayout = findViewById(R.id.swipe_layout);
         View scrollView = findViewById(R.id.scrollView2);
@@ -131,6 +159,56 @@ public class MainActivity extends AppCompatActivity {
                 }, 1500); // 模擬 1.5 秒
             }
         });
+    }
+
+    private void  resetScale(){
+        // 設定 content 初始為 scale 1
+        zoomTarget.post(()->{
+            // 取得螢幕大小
+            DisplayMetrics dm = new DisplayMetrics();
+            getWindowManager().getDefaultDisplay().getMetrics(dm);
+            int screenWidth = dm.widthPixels;
+            int screenHeight = dm.heightPixels;
+            // 取得內容原始寬高
+            int contentWidth = zoomTarget.getWidth();
+            int contentHeight = zoomTarget.getHeight();
+            // 計算最小 scale 讓內容至少等於螢幕寬或高
+            float scaleX = (float) screenWidth / contentWidth;
+            float scaleY = (float) screenHeight / contentHeight;
+            minScale = Math.min(scaleX, scaleY);
+            scaleFactor = minScale;
+            // 初始縮放一次
+            zoomTarget.setScaleX(scaleFactor);
+            zoomTarget.setScaleY(scaleFactor);
+        });
+    }
+
+    private void applyTransform() {
+        resetScale();
+        zoomTarget.setTranslationX(translationX);
+        zoomTarget.setTranslationY(translationY);
+    }
+
+    private class ScaleListener extends ScaleGestureDetector.SimpleOnScaleGestureListener {
+        @Override
+        public boolean onScale(ScaleGestureDetector detector) {
+            scaleFactor *= detector.getScaleFactor();
+            scaleFactor = Math.max(minScale, Math.min(scaleFactor, maxScale));
+            applyTransform();
+            return true;
+        }
+    }
+
+    private class PanListener extends GestureDetector.SimpleOnGestureListener {
+        @Override
+        public boolean onScroll(MotionEvent e1, MotionEvent e2, float distanceX, float distanceY) {
+            if (scaleFactor > 1.0f) {
+                translationX -= distanceX;
+                translationY -= distanceY;
+                applyTransform();
+            }
+            return true;
+        }
     }
 
     private void setDrawerAndCustomActionBar() {
@@ -220,14 +298,13 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void GetData(){
-        Request request = model.GetSandCoreList(departmentType, departmentName, isManager);
+        Request request = model.GetSandCoreList(departmentType, departmentName, alternateDeptName, isManager);
         Call call = okHttpClient.newCall(request);
         call.enqueue(new Callback() {
             @Override
             public void onFailure(@NonNull Call call, @NonNull IOException e) {
                 Log.e("SandCoreWorkingReport", e + Arrays.toString(e.getStackTrace()));
             }
-
             @Override
             public void onResponse(@NonNull Call call, @NonNull Response response) throws IOException {
                 try {
@@ -238,9 +315,7 @@ public class MainActivity extends AppCompatActivity {
                             String jsonString = responseBody.string();  // 只能讀一次
                             res= new Gson().fromJson(jsonString, SandcoreWorkOrderRes.class);
                             Log.d("debug", "response.body().string():"+jsonString);
-//                            Log.d("debug", "res.resultDict:"+res.resultDict);
                         }
-//                        res = new Gson().fromJson(response.body().string(), SandcoreWorkOrderRes.class);
                     }
                     catch(Exception e)
                     {
@@ -248,108 +323,118 @@ public class MainActivity extends AppCompatActivity {
                     }
                     gradingData.clear();
                     String sftStation = "";
-//                    if (res.resultList.size() > 0)
-                        sftStation = departmentType.length()>2?departmentType.substring(0, 2):departmentName.length()>2?departmentName.substring(0, 2):"";
+                    if (!sftStation.equals("砂心"))
+                        sftStation = departmentType.length()>=2?departmentType.substring(0, 2):departmentName.length()>2?departmentName.substring(0, 2):"";
                     ArrayList<String> columns = initColumns(sftStation);
                     gradingData.add(columns);
                     workOrderList.clear();
+                    Log.d("SandCoreWorkingReport", res.WorkStatus);
                     if (res != null && res.WorkStatus.equals("OK")) {
-                        ArrayList<String> dataContainer = new ArrayList<>();
-                        for (int i = 0; i < res.resultList.size(); i++) {
-                            dataContainer = new ArrayList<>();
-                            if (!isManager) { // 非管理者列表
-                                switch(res.resultList.get(i).SftStation)
-                                {
-                                    case "砂心":
-                                        dataContainer.add(res.resultList.get(i).SftStatus + "\r\n");                                            // 報工狀態
-                                        dataContainer.add((i + 1) + "\r\n");                                                                    // 序號
-                                        dataContainer.add(res.resultList.get(i).SandCorePlanStartDate + "\r\n");                                // 砂心預計生產日
-                                        dataContainer.add(res.resultList.get(i).MoldingGroup + "\r\n");                                         // 外模組別
-                                        dataContainer.add(res.resultList.get(i).MoldingPlanStartDate + "\r\n");                                 // 外模預計生產日
-                                        dataContainer.add(res.resultList.get(i).AssemblingGroup + "\r\n");                                      // 合模組別
-                                        dataContainer.add(res.resultList.get(i).ItemNo + "\r\n");                                               // 產品代號
-                                        dataContainer.add(                                                                                      // 製令品名規格
-                                                (departmentType.equals("砂心") ? res.resultList.get(i).SandCoreWorkOrder : res.resultList.get(i).WorkOrder)
-                                                        + "\r\n" + (res.resultList.get(i).ItemDesc.length() > 9 ? res.resultList.get(i).ItemDesc.substring(0, 9) : res.resultList.get(i).ItemDesc));
-                                        dataContainer.add((res.resultList.get(i).ThisWeekQuantity) + "\r\n");                                   // 本週數量
-                                        dataContainer.add((res.resultList.get(i).UnitWeight) + "\r\n");                                         // 單重
-                                        dataContainer.add(res.resultList.get(i).SandCoreLocation + "\r\n");                                     // 砂心存放位置
-                                        break;
-                                    case "造模":
-                                        dataContainer.add(res.resultList.get(i).SftStatus + "\r\n");                                    // 報工狀態
-                                        dataContainer.add((i + 1) + "\r\n");                                                            // 序號
-                                        dataContainer.add(res.resultList.get(i).SandCoreEndDate + "\r\n");                              // 砂心完成日
-                                        dataContainer.add(res.resultList.get(i).MoldingGroup + "\r\n");                                 // 外模組別
-                                        dataContainer.add(res.resultList.get(i).MoldingPlanStartDate + "\r\n");                         // 外模預計生產日
-                                        dataContainer.add(res.resultList.get(i).AssemblingGroup + "\r\n");                              // 合模組別
-                                        dataContainer.add(res.resultList.get(i).ItemNo + "\r\n");                                       // 產品代號
-                                        dataContainer.add(res.resultList.get(i).Material + "\r\n");                                     // 材質
-//                                        dataContainer.add(res.resultList.get(i).FlaskId + "\r\n");                                      // 鐵斗
-                                        dataContainer.add(                                                                              // 製令品名規格
-                                                (departmentType.equals("砂心") ? res.resultList.get(i).SandCoreWorkOrder : res.resultList.get(i).WorkOrder)
-                                                        + "\r\n" + (res.resultList.get(i).ItemDesc.length() > 9 ? res.resultList.get(i).ItemDesc.substring(0, 9) : res.resultList.get(i).ItemDesc));
-                                        dataContainer.add((res.resultList.get(i).ThisWeekQuantity) + "\r\n");                           // 本週數量
-                                        dataContainer.add((res.resultList.get(i).UnitWeight) + "\r\n");                                 // 單重
-                                        dataContainer.add((res.resultList.get(i).DispatchStatus) + "\r\n");                             // 模具到站狀態
-                                        break;
-                                    case "合模":
-                                        dataContainer.add(res.resultList.get(i).SftStatus + "\r\n");                                    // 報工狀態
-                                        dataContainer.add((i + 1) + "\r\n");                                                            // 序號
-                                        dataContainer.add(res.resultList.get(i).MoldingEndDate + "\r\n");                               // 外模完成日
-                                        dataContainer.add(res.resultList.get(i).MoldingGroup + "\r\n");                                 // 外模組別
-                                        dataContainer.add(res.resultList.get(i).AssemblingGroup + "\r\n");                              // 合模組別
-                                        dataContainer.add(res.resultList.get(i).ItemNo + "\r\n");                                       // 產品代號
-                                        dataContainer.add(res.resultList.get(i).Material + "\r\n");                                     // 材質
-                                        dataContainer.add(res.resultList.get(i).BottomFlask + "\r\n");                                      // 鐵斗
-                                        dataContainer.add(                                                                              // 製令品名規格
-                                                (departmentType.equals("砂心") ? res.resultList.get(i).SandCoreWorkOrder : res.resultList.get(i).WorkOrder)
-                                                        + "\r\n" + (res.resultList.get(i).ItemDesc.length() > 9 ? res.resultList.get(i).ItemDesc.substring(0, 9) : res.resultList.get(i).ItemDesc));
-                                        dataContainer.add((res.resultList.get(i).ThisWeekQuantity) + "\r\n");                           // 本週數量
-                                        dataContainer.add((res.resultList.get(i).UnitWeight) + "\r\n");                                 // 單重
-                                        dataContainer.add((res.resultList.get(i).DispatchStatus) + "\r\n");                             // 模具到站狀態
-                                        break;
-                                    case "電爐":
-                                        dataContainer.add(res.resultList.get(i).SftStatus + "\r\n");                                    // 報工狀態
-                                        dataContainer.add((i + 1) + "\r\n");                                                            // 序號
-                                        dataContainer.add(res.resultList.get(i).AssemblingEndDate + "\r\n");                            // 合模完成日
-                                        dataContainer.add(res.resultList.get(i).AssemblingGroup + "\r\n");                              // 合模組別
-                                        dataContainer.add(res.resultList.get(i).ItemNo + "\r\n");                                       // 產品代號
-                                        dataContainer.add(res.resultList.get(i).Material + "\r\n");                                     // 材質
-                                        dataContainer.add(                                                                              // 製令品名規格
-                                                (departmentType.equals("砂心") ? res.resultList.get(i).SandCoreWorkOrder : res.resultList.get(i).WorkOrder)
-                                                        + "\r\n" + (res.resultList.get(i).ItemDesc.length() > 9 ? res.resultList.get(i).ItemDesc.substring(0, 9) : res.resultList.get(i).ItemDesc));
-                                        dataContainer.add((res.resultList.get(i).ThisWeekQuantity) + "\r\n");                           // 本週數量
-                                        dataContainer.add((res.resultList.get(i).UnitWeight) + "\r\n");                                 // 單重
-
-                                        dataContainer.add(res.resultList.get(i).BottomFlask + "\r\n");                                  // 鐵斗
-                                        dataContainer.add((res.resultList.get(i).DispatchStatus) + "\r\n");                             // 模具到站狀態
-                                        break;
-                                }
-
-                            } else { // 管理者列表
-                                dataContainer.add(res.resultList.get(i).SftStation + "\r\n" + res.resultList.get(i).SftStatus);
-                                dataContainer.add((i + 1) + "\r\n");
-                                dataContainer.add(res.resultList.get(i).SandCorePlanStartDate + "\r\n");
-                                dataContainer.add(res.resultList.get(i).MoldingGroup + "\r\n");
-                                dataContainer.add(res.resultList.get(i).MoldingPlanStartDate + "\r\n");
-                                dataContainer.add(res.resultList.get(i).AssemblingGroup + "\r\n");
-                                dataContainer.add(res.resultList.get(i).ItemNo + "\r\n");
-                                dataContainer.add(
-                                        (departmentType == "砂心" ? res.resultList.get(i).SandCoreWorkOrder : res.resultList.get(i).WorkOrder)
-                                                + "\r\n" + (res.resultList.get(i).ItemDesc.length() > 9 ? res.resultList.get(i).ItemDesc.substring(0, 9) : res.resultList.get(i).ItemDesc));
-                                dataContainer.add((res.resultList.get(i).ThisWeekQuantity) + "\r\n");
-                                dataContainer.add((res.resultList.get(i).UnitWeight) + "\r\n");
-                                dataContainer.add(res.resultList.get(i).SandCoreLocation + "\r\n");
-                            }
-                            workOrderList.add((departmentType.equals("砂心") ? res.resultList.get(i).SandCoreWorkOrder : res.resultList.get(i).WorkOrder));
-                            gradingData.add(dataContainer);
-                            hm.put(res.resultList.get(i).WorkOrder, res.resultList.get(i).BottomFlask);
-                        }
-                   }
+                        ArrayList<String> data = initData(hm, res.resultList);
+                        gradingData.add(data);
+                    }
                     initGridViewWData(gradingData);
                 }catch (Exception ex){
                     Log.e("SandCoreWorkingReport", ex + Arrays.toString(ex.getStackTrace()));
                 }
+            }
+            private ArrayList<String> initData(HashMap hm, ArrayList<PROD_WorkOrderDispatch> resultList) {
+
+                ArrayList<String> dataContainer = new ArrayList<>();
+                for (int i = 0; i < resultList.size(); i++) {
+                    dataContainer = new ArrayList<>();
+                    if (!isManager) { // 非管理者列表
+                        switch(resultList.get(i).SftStation)
+                        {
+                            case "砂心":
+                                dataContainer.add(resultList.get(i).SftStatus + "\r\n");                                            // 報工狀態
+                                dataContainer.add((i + 1) + "\r\n");                                                                    // 序號
+                                dataContainer.add(resultList.get(i).SandCorePlanStartDate + "\r\n");                                // 砂心預計生產日
+                                dataContainer.add(resultList.get(i).MoldingGroup + "\r\n");                                         // 外模組別
+                                dataContainer.add(resultList.get(i).MoldingPlanStartDate + "\r\n");                                 // 外模預計生產日
+                                dataContainer.add(resultList.get(i).AssemblingGroup + "\r\n");                                      // 合模組別
+                                dataContainer.add(resultList.get(i).ItemNo + "\r\n");                                               // 產品代號
+                                dataContainer.add(                                                                                      // 製令品名規格
+                                        (departmentType.equals("砂心") ? resultList.get(i).SandCoreWorkOrder : resultList.get(i).WorkOrder)
+                                                + "\r\n" + (resultList.get(i).ItemDesc.length() > 9 ? resultList.get(i).ItemDesc.substring(0, 9) : resultList.get(i).ItemDesc));
+                                dataContainer.add((resultList.get(i).ThisWeekQuantity) + "\r\n");                                   // 本週數量
+                                dataContainer.add((resultList.get(i).UnitWeight) + "\r\n");                                         // 單重
+                                dataContainer.add(resultList.get(i).SandCoreLocation + "\r\n");                                     // 砂心存放位置
+                                dataContainer.add("\r\n");
+                                break;
+                            case "造模":
+                                dataContainer.add(resultList.get(i).SftStatus + "\r\n");                                    // 報工狀態
+                                dataContainer.add((i + 1) + "\r\n");                                                            // 序號
+                                dataContainer.add(resultList.get(i).SandCoreEndDate + "\r\n");                              // 砂心完成日
+                                dataContainer.add(resultList.get(i).MoldingGroup + "\r\n");                                 // 外模組別
+                                dataContainer.add(resultList.get(i).MoldingPlanStartDate + "\r\n");                         // 外模預計生產日
+                                dataContainer.add(resultList.get(i).AssemblingGroup + "\r\n");                              // 合模組別
+                                dataContainer.add(resultList.get(i).ItemNo + "\r\n");                                       // 產品代號
+                                dataContainer.add(resultList.get(i).Material + "\r\n");                                     // 材質
+//                                        dataContainer.add(res.resultList.get(i).FlaskId + "\r\n");                                      // 鐵斗
+                                dataContainer.add(                                                                              // 製令品名規格
+                                        (departmentType.equals("砂心") ? resultList.get(i).SandCoreWorkOrder : resultList.get(i).WorkOrder)
+                                                + "\r\n" + (resultList.get(i).ItemDesc.length() > 9 ? resultList.get(i).ItemDesc.substring(0, 9) : resultList.get(i).ItemDesc));
+                                dataContainer.add((resultList.get(i).ThisWeekQuantity) + "\r\n");                           // 本週數量
+                                dataContainer.add((resultList.get(i).UnitWeight) + "\r\n");                                 // 單重
+                                dataContainer.add((resultList.get(i).DispatchStatus) + "\r\n");                             // 模具到站狀態
+                                dataContainer.add("\r\n");
+                                break;
+                            case "合模":
+                                dataContainer.add(resultList.get(i).SftStatus + "\r\n");                                    // 報工狀態
+                                dataContainer.add((i + 1) + "\r\n");                                                            // 序號
+                                dataContainer.add(resultList.get(i).MoldingEndDate + "\r\n");                               // 外模完成日
+                                dataContainer.add(resultList.get(i).MoldingGroup + "\r\n");                                 // 外模組別
+                                dataContainer.add(resultList.get(i).AssemblingGroup + "\r\n");                              // 合模組別
+                                dataContainer.add(resultList.get(i).ItemNo + "\r\n");                                       // 產品代號
+                                dataContainer.add(resultList.get(i).Material + "\r\n");                                     // 材質
+                                dataContainer.add(resultList.get(i).BottomFlask + "\r\n");                                      // 鐵斗
+                                dataContainer.add(                                                                              // 製令品名規格
+                                        (departmentType.equals("砂心") ? resultList.get(i).SandCoreWorkOrder : resultList.get(i).WorkOrder)
+                                                + "\r\n" + (resultList.get(i).ItemDesc.length() > 9 ? resultList.get(i).ItemDesc.substring(0, 9) : resultList.get(i).ItemDesc));
+                                dataContainer.add((resultList.get(i).ThisWeekQuantity) + "\r\n");                           // 本週數量
+                                dataContainer.add((resultList.get(i).UnitWeight) + "\r\n");                                 // 單重
+                                dataContainer.add((resultList.get(i).DispatchStatus) + "\r\n");                             // 模具到站狀態
+                                dataContainer.add("\r\n");
+                                break;
+                            case "電爐":
+                                dataContainer.add(resultList.get(i).SftStatus + "\r\n");                                    // 報工狀態
+                                dataContainer.add((i + 1) + "\r\n");                                                            // 序號
+                                dataContainer.add(resultList.get(i).AssemblingEndDate + "\r\n");                            // 合模完成日
+                                dataContainer.add(resultList.get(i).AssemblingGroup + "\r\n");                              // 合模組別
+                                dataContainer.add(resultList.get(i).ItemNo + "\r\n");                                       // 產品代號
+                                dataContainer.add(resultList.get(i).Material + "\r\n");                                     // 材質
+                                dataContainer.add(                                                                              // 製令品名規格
+                                        (departmentType.equals("砂心") ? resultList.get(i).SandCoreWorkOrder : resultList.get(i).WorkOrder)
+                                                + "\r\n" + (resultList.get(i).ItemDesc.length() > 9 ? resultList.get(i).ItemDesc.substring(0, 9) : resultList.get(i).ItemDesc));
+                                dataContainer.add((resultList.get(i).ThisWeekQuantity) + "\r\n");                           // 本週數量
+                                dataContainer.add((resultList.get(i).UnitWeight) + "\r\n");                                 // 單重
+
+                                dataContainer.add(resultList.get(i).BottomFlask + "\r\n");                                  // 鐵斗
+                                dataContainer.add((resultList.get(i).DispatchStatus) + "\r\n");                             // 模具到站狀態
+                                break;
+                        }
+
+                    } else { // 管理者列表
+                        dataContainer.add(resultList.get(i).SftStation + "\r\n" + resultList.get(i).SftStatus);
+                        dataContainer.add((i + 1) + "\r\n");
+                        dataContainer.add(resultList.get(i).SandCorePlanStartDate + "\r\n");
+                        dataContainer.add(resultList.get(i).MoldingGroup + "\r\n");
+                        dataContainer.add(resultList.get(i).MoldingPlanStartDate + "\r\n");
+                        dataContainer.add(resultList.get(i).AssemblingGroup + "\r\n");
+                        dataContainer.add(resultList.get(i).ItemNo + "\r\n");
+                        dataContainer.add(
+                                (departmentType == "砂心" ? resultList.get(i).SandCoreWorkOrder : resultList.get(i).WorkOrder)
+                                        + "\r\n" + (resultList.get(i).ItemDesc.length() > 9 ? resultList.get(i).ItemDesc.substring(0, 9) : resultList.get(i).ItemDesc));
+                        dataContainer.add((resultList.get(i).ThisWeekQuantity) + "\r\n");
+                        dataContainer.add((resultList.get(i).UnitWeight) + "\r\n");
+                        dataContainer.add(resultList.get(i).SandCoreLocation + "\r\n");
+                    }
+                    workOrderList.add((departmentType.equals("砂心") ? resultList.get(i).SandCoreWorkOrder : resultList.get(i).WorkOrder));
+                    gradingData.add(dataContainer);
+                    hm.put(resultList.get(i).WorkOrder, resultList.get(i).BottomFlask);
+                }
+                return dataContainer;
             }
         });
     }
@@ -363,6 +448,32 @@ public class MainActivity extends AppCompatActivity {
             }
             catch (Exception ex){
                 Log.e("initGridViewWData error", ex.getMessage());
+            }
+        });
+    }
+
+    private void uploadSfcData(String[] workOrderArr,  ArrayList<ArrayList<String>> gradingData, int index,
+                               String inputText, String flaskInputText, View v) {
+
+        Request request = model.UploadSfcData(workOrderArr, gradingData, index, inputText, flaskInputText);
+        Call call = okHttpClient.newCall(request);
+
+        call.enqueue(new Callback() {
+            @Override
+            public void onFailure(@NonNull Call call, @NonNull IOException e) {
+                ((MainActivity) v.getContext()).runOnUiThread(() ->
+                        Toast.makeText(MainActivity.this, e.toString() + e.getStackTrace(), Toast.LENGTH_LONG).show()
+                );
+            }
+
+            @Override
+            public void onResponse(@NonNull Call call, @NonNull Response response) throws IOException {
+                try {
+                    ((MainActivity) v.getContext()).runOnUiThread(() -> doAfterWorkReporting(response));
+                    GetData();
+                } catch (Exception ex) {
+                    Log.e("ReportWorkError", ex + Arrays.toString(ex.getStackTrace()));
+                }
             }
         });
     }
@@ -381,6 +492,7 @@ public class MainActivity extends AppCompatActivity {
             columns.add("本週數量\r\n");
             columns.add("單重\r\n");
             columns.add("砂心存放\r\n位置");
+            columns.add("報修\r\n模具");
         } else {
             switch(SftStation){
                 case "造模":
@@ -397,6 +509,7 @@ public class MainActivity extends AppCompatActivity {
                     columns.add("本週數量\r\n");
                     columns.add("單重\r\n");
                     columns.add("模具到站\r\n狀態");
+                    columns.add("報修\r\n模具");
                     break;
                 case "合模":
                     columns.add("報工狀態\r\n");
@@ -411,6 +524,7 @@ public class MainActivity extends AppCompatActivity {
                     columns.add("本週數量\r\n");
                     columns.add("單重\r\n");
                     columns.add("模具到站\r\n狀態");
+                    columns.add("報修\r\n模具");
                     break;
                 case "電爐":
                 case "熔解":
@@ -425,6 +539,7 @@ public class MainActivity extends AppCompatActivity {
                     columns.add("單重\r\n");
                     columns.add("鐵斗\r\n");
                     columns.add("模具到站\r\n狀態");
+                    columns.add("報修\r\n模具");
                     break;
             }
 //            columns.add("報工狀態\r\n");
@@ -458,223 +573,369 @@ public class MainActivity extends AppCompatActivity {
         TableRow.LayoutParams tableRowParams = new TableRow.LayoutParams();
         tableRowParams.weight = 1;
         for (int i = 0; i < gradingData.size(); i++) {
-            // 3) create tableRow
-            final int index = i ;
-            TableRow tableRow = new TableRow(this);
-            if (!isManager) { // 管理者不可報工
-                tableRow.setOnClickListener(v -> {
-                    if (index == 0)
-                        return;
-                    // 定義Layout
-                    // 建立一個垂直方向的 LinearLayout 作為容器
-                    LinearLayout layout = new LinearLayout(MainActivity.this);
-                    layout.setOrientation(LinearLayout.VERTICAL);
-                    layout.setPadding(50, 40, 50, 10); // 可選的 padding，讓 UI 看起來更舒服
+            try{
+                // 3) create tableRow
+                final int index = i ;
+                TableRow tableRow = new TableRow(this);
+                if (!isManager) { // 管理者不可報工
+                    tableRow.setOnClickListener(v -> {
+                        if (index == 0)
+                            return;
+                        // 定義Layout
+                        // 建立一個垂直方向的 LinearLayout 作為容器
+                        LinearLayout layout = new LinearLayout(MainActivity.this);
+                        layout.setOrientation(LinearLayout.VERTICAL);
+                        layout.setPadding(50, 40, 50, 10); // 可選的 padding，讓 UI 看起來更舒服
 
-                    // 工號
-                    final EditText input = new EditText(MainActivity.this);
-                    input.setHint("請輸入工號");
-                    input.setText(reportWorkingNumber);
-                    input.setInputType(InputType.TYPE_CLASS_NUMBER);
-                    layout.addView(input);
-                    Log.d("DEBUG", "index:"+index);
-                    if (hm.containsKey(workOrderList.get(index - 1))) {
-                        flaskId = (String) hm.get(workOrderList.get(index - 1));
-                    }
-                    final EditText flaskInput = new EditText(MainActivity.this);
-                    if (departmentType.equals("造模") || departmentType.equals("合模") || departmentName.indexOf("熔解") != -1) {// 造模、合模、澆注均需要可以改鐵斗號碼
-                        flaskInput.setHint("請輸入鐵斗");
-                        flaskInput.setText(flaskId);
-                        flaskInput.setInputType(InputType.TYPE_CLASS_NUMBER);
-                        layout.addView(flaskInput);
-                    }
+                        // 工號
+                        final EditText input = new EditText(MainActivity.this);
+                        input.setHint("請輸入工號");
+                        input.setText(reportWorkingNumber);
+                        input.setInputType(InputType.TYPE_CLASS_NUMBER);
+                        layout.addView(input);
+                        Log.d("DEBUG", "index:"+index);
+                        if (hm.containsKey(workOrderList.get(index - 1))) {
+                            flaskId = (String) hm.get(workOrderList.get(index - 1));
+                        }
+                        final EditText flaskInput = new EditText(MainActivity.this);
+                        if (departmentType.equals("造模") || departmentType.equals("合模") || departmentName.indexOf("熔解") != -1) {// 造模、合模、澆注均需要可以改鐵斗號碼
+                            flaskInput.setHint("請輸入鐵斗");
+                            flaskInput.setText(flaskId);
+                            flaskInput.setInputType(InputType.TYPE_CLASS_NUMBER);
+                            layout.addView(flaskInput);
+                        }
 
-                    AlertDialog.Builder builder = new AlertDialog.Builder(MainActivity.this);
-                    builder.setTitle("報工")
-                            .setMessage(
-                                    (departmentType.equals("造模") || departmentType.equals("合模")) ? "製令編號：" + (workOrderList.get(index - 1)) + "，請輸入工號及鐵斗編號報工" : "製令編號：" + (workOrderList.get(index - 1)) + "，請輸入工號報工"
-                            )
-                            .setView(layout);
-                    builder.setPositiveButton("報工", (dialog, which) -> {
-                        try {
-                            if (gradingData.get(index).get(0).indexOf("已完成") != -1) {
-                                Toast.makeText(MainActivity.this, "已完成無法再報工", Toast.LENGTH_LONG).show();
-                                return;
-                            }
-                            if (reportWorkingNumber == null || reportWorkingNumber.isEmpty()) {
-                                reportWorkingNumber = input.getText().toString();
-                            }
-                            if (flaskId == null || flaskId.isEmpty()) {
-                                flaskId = flaskInput.getText().toString();
-                            }
-                            if (!flaskId.equals(flaskInput.getText().toString())) {
-                                AlertDialog.Builder flaskBuilder = new AlertDialog.Builder(MainActivity.this);
-                                if (departmentType.indexOf("合模") != -1) {
-                                    flaskBuilder.setTitle("報工")
-                                            .setMessage("合模維護的下模編號與造模維護的編號不同，是否要更新?")
-                                            .setPositiveButton("報工", (dialog1, which1) -> ((MainActivity) v.getContext()).runOnUiThread(
-                                                    () -> {
-                                                        String[] workOrderArr = workOrderList.get(index - 1).split("-");
-                                                        Request request = model.UploadSfcData(workOrderArr, gradingData, index, input.getText().toString(), flaskInput.getText().toString());
-                                                        Call call = okHttpClient.newCall(request);
-                                                        call.enqueue(new Callback() {
-                                                            @Override
-                                                            public void onFailure(@NonNull Call call, @NonNull IOException e) {
-                                                                ((MainActivity) v.getContext()).runOnUiThread(
-                                                                        () -> Toast.makeText(MainActivity.this, e.toString() + e.getStackTrace(), Toast.LENGTH_LONG).show()
-                                                                );
-                                                            }
-
-                                                            @Override
-                                                            public void onResponse(@NonNull Call call, @NonNull Response response) throws IOException {
-                                                                try {
-                                                                    ((MainActivity) v.getContext()).runOnUiThread(
-                                                                            () -> {
-                                                                                ResponseBody responseBody = response.body();
-                                                                                SandcoreWorkOrderRes res = new SandcoreWorkOrderRes();
-                                                                                try {
-                                                                                    if (responseBody != null) {
-                                                                                        String jsonString = responseBody.string();  // 只能讀一次
-                                                                                        res = new Gson().fromJson(jsonString, SandcoreWorkOrderRes.class);
-//                                                                        Log.d("debug", "response.body().string():"+jsonString);
-                                                                                    }
-                                                                                    if (res.WorkStatus.equals("OK"))
-                                                                                        Toast.makeText(MainActivity.this, "執行成功", Toast.LENGTH_LONG).show();
-                                                                                    else
-                                                                                        Toast.makeText(MainActivity.this, res.ErrorMsg, Toast.LENGTH_LONG).show();
-                                                                                } catch (
-                                                                                        Exception e) {
-                                                                                    Toast.makeText(MainActivity.this, e+ Arrays.toString(e.getStackTrace()), Toast.LENGTH_LONG).show();
-                                                                                }
-                                                                            }
-                                                                    );
-                                                                    GetData();
-                                                                } catch (
-                                                                        Exception ex) {
-                                                                    Log.e("ReportWorkError", ex + Arrays.toString(ex.getStackTrace()));
-                                                                }
-                                                            }
-                                                        });
-                                                    }
-                                            ))
-                                            .setNegativeButton("取消", (dialog2, which2) -> {
-
-                                            }).show();
+                        AlertDialog.Builder builder = new AlertDialog.Builder(MainActivity.this);
+                        builder.setTitle("報工")
+                                .setMessage(
+                                        (departmentType.equals("造模") || departmentType.equals("合模")) ? "製令編號：" + (workOrderList.get(index - 1)) + "，請輸入工號及鐵斗編號報工" : "製令編號：" + (workOrderList.get(index - 1)) + "，請輸入工號報工"
+                                )
+                                .setView(layout);
+                        builder.setPositiveButton("報工", (dialog, which) -> {
+                            try {
+                                if (gradingData.get(index).get(0).indexOf("已完成") != -1) {
+                                    Toast.makeText(MainActivity.this, "已完成無法再報工", Toast.LENGTH_LONG).show();
+                                    return;
                                 }
-                            } else {
-                                String[] workOrderArr = workOrderList.get(index - 1).split("-");
-                                Request request = model.UploadSfcData(workOrderArr, gradingData, index, input.getText().toString(), flaskInput.getText().toString());
-                                Call call = okHttpClient.newCall(request);
-                                call.enqueue(new Callback() {
-                                    @Override
-                                    public void onFailure(@NonNull Call call, @NonNull IOException e) {
-                                        ((MainActivity) v.getContext()).runOnUiThread(
-                                                () -> Toast.makeText(MainActivity.this, e.toString() + e.getStackTrace(), Toast.LENGTH_LONG).show()
-                                        );
-                                    }
+                                if (reportWorkingNumber == null || reportWorkingNumber.isEmpty()) {
+                                    reportWorkingNumber = input.getText().toString();
+                                }
+                                if (flaskId == null || flaskId.isEmpty()) {
+                                    flaskId = flaskInput.getText().toString();
+                                }
+                                if (!flaskId.equals(flaskInput.getText().toString())) {
+                                    AlertDialog.Builder flaskBuilder = new AlertDialog.Builder(MainActivity.this);
+                                    if (departmentType.indexOf("合模") != -1) {
+                                        flaskBuilder.setTitle("報工")
+                                                .setMessage("合模維護的下模編號與造模維護的編號不同，是否要更新?")
+                                                .setPositiveButton("報工", (dialog1, which1) -> ((MainActivity) v.getContext()).runOnUiThread(
+                                                        () -> {
+                                                            String[] workOrderArr = workOrderList.get(index - 1).split("-");
+                                                            Request request = model.UploadSfcData(workOrderArr, gradingData, index, input.getText().toString(), flaskInput.getText().toString());
+                                                            Call call = okHttpClient.newCall(request);
+                                                            call.enqueue(new Callback() {
+                                                                @Override
+                                                                public void onFailure(@NonNull Call call, @NonNull IOException e) {
+                                                                    ((MainActivity) v.getContext()).runOnUiThread(
+                                                                            () -> Toast.makeText(MainActivity.this, e.toString() + e.getStackTrace(), Toast.LENGTH_LONG).show()
+                                                                    );
+                                                                }
 
-                                    @Override
-                                    public void onResponse(@NonNull Call call, @NonNull Response response) throws IOException {
-                                        try {
-                                            ((MainActivity) v.getContext()).runOnUiThread(
-                                                    () -> {
-                                                        ResponseBody responseBody = response.body();
-                                                        SandcoreWorkOrderRes res = new SandcoreWorkOrderRes();
-                                                        try {
-                                                            if (responseBody != null) {
-                                                                String jsonString = responseBody.string();  // 只能讀一次
-                                                                res = new Gson().fromJson(jsonString, SandcoreWorkOrderRes.class);
-//                                                                        Log.d("debug", "response.body().string():"+jsonString);
-                                                            }
-                                                            if (res.WorkStatus.equals("OK"))
-                                                                Toast.makeText(MainActivity.this, "執行成功", Toast.LENGTH_LONG).show();
-                                                            else
-                                                                Toast.makeText(MainActivity.this, res.ErrorMsg, Toast.LENGTH_LONG).show();
-                                                        } catch (Exception e) {
-                                                            Toast.makeText(MainActivity.this, e + Arrays.toString(e.getStackTrace()), Toast.LENGTH_LONG).show();
+                                                                @Override
+                                                                public void onResponse(@NonNull Call call, @NonNull Response response) throws IOException {
+                                                                    try {
+                                                                        ((MainActivity) v.getContext()).runOnUiThread(
+                                                                                () -> {
+                                                                                    doAfterWorkReporting(response);
+                                                                                }
+                                                                        );
+                                                                        GetData();
+                                                                    } catch (
+                                                                            Exception ex) {
+                                                                        Log.e("ReportWorkError", ex + Arrays.toString(ex.getStackTrace()));
+                                                                    }
+                                                                }
+                                                            });
                                                         }
-                                                    }
+                                                ))
+                                                .setNegativeButton("取消", (dialog2, which2) -> {
+                                                }).show();
+                                    }
+                                    if (departmentType.indexOf("造模") != -1){
+                                        String[] workOrderArr = workOrderList.get(index - 1).split("-");
+                                        uploadSfcData(workOrderArr, gradingData, index,
+                                                input.getText().toString(), flaskInput.getText().toString(), v);
+                                    }
+                                } else {
+                                    String[] workOrderArr = workOrderList.get(index - 1).split("-");
+                                    Request request = model.UploadSfcData(workOrderArr, gradingData, index, input.getText().toString(), flaskInput.getText().toString());
+                                    Call call = okHttpClient.newCall(request);
+                                    call.enqueue(new Callback() {
+                                        @Override
+                                        public void onFailure(@NonNull Call call, @NonNull IOException e) {
+                                            ((MainActivity) v.getContext()).runOnUiThread(
+                                                    () -> Toast.makeText(MainActivity.this, e.toString() + e.getStackTrace(), Toast.LENGTH_LONG).show()
                                             );
-                                            GetData();
-                                        } catch (Exception ex) {
-                                            Log.e("ReportWorkError", ex + Arrays.toString(ex.getStackTrace()));
+                                        }
+                                        @Override
+                                        public void onResponse(@NonNull Call call, @NonNull Response response) throws IOException {
+                                            try {
+                                                ((MainActivity) v.getContext()).runOnUiThread(
+                                                        () -> {
+                                                            doAfterWorkReporting(response);
+                                                        }
+                                                );
+                                                GetData();
+                                            } catch (Exception ex) {
+                                                Log.e("ReportWorkError", ex + Arrays.toString(ex.getStackTrace()));
+                                            }
+                                        }
+                                    });
+                                }
+                            } catch (Exception ex) {
+                                ((MainActivity) v.getContext()).runOnUiThread(
+                                        () -> Toast.makeText(MainActivity.this, ex + Arrays.toString(ex.getStackTrace()), Toast.LENGTH_LONG).show()
+                                );
+                            }
+                        })
+                        .setNegativeButton("取消", null)
+                        .show();
+                    });
+                }
+                // 填充表格
+                for (int j = 0; j < gradingData.get(0).size(); j++) {
+                    // 4) create textView
+                    if (i == 0) {
+                        TextView textView = new TextView(this);
+                        textView.setGravity(Gravity.CENTER);
+                        textView.setTextSize(TEXT_SIZE);
+                        Typeface typeface = ResourcesCompat.getFont(this, R.font.my_font_bold);
+                        textView.setTypeface(typeface);
+                        textView.setBackgroundResource(R.drawable.cell_border);
+                        textView.setPadding(0, 20, 0, 10);
+                        try {
+                            textView.setText(gradingData.get(i).get(j));
+                        } catch (Exception e) {
+                            Log.d("ERRORR INDEX:", String.valueOf(j));
+                        }
+                        textView.setTextColor(Color.BLACK);
+                        // 合模如果造模完成後超過2天，show紅色字體
+                        Log.d("DEBUG:", gradingData.get(0).get(2));
+                        if (gradingData.get(0).get(2).indexOf("外模") != -1) {// 合模會show外模完成日，以此作為條件判斷
+                            Date toDay = new Date();
+                            if (i != 0) {
+                                SimpleDateFormat sdf = new SimpleDateFormat("yyyyMMdd");
+                                Date moldCompDate = null;
+                                try {
+                                    moldCompDate = sdf.parse(gradingData.get(i).get(2).toString());
+
+                                    Log.d("DEBUG:", toDay.toString());
+                                    Log.d("DEBUG:", moldCompDate.toString());
+                                    if (((toDay.getTime() - moldCompDate.getTime()) / (1000 * 60 * 60 * 24)) > 2) {
+                                        if (gradingData.get(i).get(0).toString().indexOf("未進站") != -1) {
+                                            textView.setTextColor(Color.RED);
                                         }
                                     }
-                                });
-                            }
-                        } catch (Exception ex) {
-                            ((MainActivity) v.getContext()).runOnUiThread(
-                                    () -> Toast.makeText(MainActivity.this, ex + Arrays.toString(ex.getStackTrace()), Toast.LENGTH_LONG).show()
-                            );
-                        }
-                    })
-                    .setNegativeButton("取消", null)
-                    .show();
-                });
-            }
-            // 填充表格
-            for (int j = 0; j < gradingData.get(0).size(); j++) {
-                // 4) create textView
-
-                TextView textView = new TextView(this);
-                textView.setGravity(Gravity.CENTER);
-                textView.setTextSize(9);
-                Typeface typeface = ResourcesCompat.getFont(this, R.font.my_font_bold);
-                textView.setTypeface(typeface);
-                textView.setBackgroundResource(R.drawable.cell_border);
-                textView.setPadding(0, 20, 0, 10);
-                textView.setText(gradingData.get(i).get(j));
-                textView.setTextColor(Color.BLACK);
-                // 合模如果造模完成後超過2天，show紅色字體
-                Log.d("DEBUG:",gradingData.get(0).get(2));
-                if (gradingData.get(0).get(2).indexOf("外模") != -1) {// 合模會show外模完成日，以此作為條件判斷
-                    Date toDay = new Date();
-                    if (i != 0) {
-                        SimpleDateFormat sdf = new SimpleDateFormat("yyyyMMdd");
-                        Date moldCompDate = null;
-                        try {
-                            moldCompDate = sdf.parse(gradingData.get(i).get(2).toString());
-
-                            Log.d("DEBUG:", toDay.toString());
-                            Log.d("DEBUG:", moldCompDate.toString());
-                            if (((toDay.getTime() - moldCompDate.getTime()) / (1000 * 60 * 60 * 24)) > 2){
-                                if (gradingData.get(i).get(0).toString().indexOf("未進站") != -1) {
-                                    textView.setTextColor(Color.RED);
+                                } catch (Exception e) {
+                                    throw new RuntimeException(e);
                                 }
                             }
-                        } catch (ParseException e) {
-                            throw new RuntimeException(e);
                         }
-                    }
-                }
-                if (i == 0) {
-                    textView.setBackgroundColor(Color.parseColor( "#aeaeae"));
-                } else {
-                    if (j == 0) {
-                        if (gradingData.get(i).get(j).indexOf("未進站") != -1) {
-                            textView.setTextColor(Color.BLACK);
-                            textView.setBackgroundColor(Color.parseColor("#00ff00"));
-                        } else if (gradingData.get(i).get(j).indexOf("已完成") != -1) {
-                            textView.setTextColor(Color.BLACK);
-                            textView.setBackgroundColor(Color.YELLOW);
-                        }  else {
-                            textView.setTextColor(Color.WHITE);
-                            textView.setBackgroundColor(Color.RED);
+                        if (i == 0) {
+                            textView.setBackgroundColor(Color.parseColor("#aeaeae"));
+                        } else {
+                            if (j == 0) {
+                                if (gradingData.get(i).get(j).indexOf("未進站") != -1) {
+                                    textView.setTextColor(Color.BLACK);
+                                    textView.setBackgroundColor(Color.parseColor("#00ff00"));
+                                } else if (gradingData.get(i).get(j).indexOf("已完成") != -1) {
+                                    textView.setTextColor(Color.BLACK);
+                                    textView.setBackgroundColor(Color.YELLOW);
+                                } else {
+                                    textView.setTextColor(Color.WHITE);
+                                    textView.setBackgroundColor(Color.RED);
+                                }
+                            }
                         }
-                    }
-                }
-                CardView cardView = new CardView(this);
-                cardView.setPadding(10, 10, 10, 10);
-                cardView.setRadius(15);
+                        CardView cardView = new CardView(this);
+                        cardView.setPadding(10, 10, 10, 10);
+                        cardView.setRadius(15);
 
-                cardView.setMinimumHeight(30);
-                cardView.setMinimumWidth(30);
-                cardView.addView(textView);
-                tableRow.addView(cardView, tableRowParams);
+                        cardView.setMinimumHeight(30);
+                        cardView.setMinimumWidth(30);
+                        cardView.addView(textView);
+                        tableRow.addView(cardView, tableRowParams);
+                    }
+                    else
+                    {
+                        if (j != gradingData.get(0).size() - 1)
+                        {
+                            TextView textView = new TextView(this);
+                            textView.setGravity(Gravity.CENTER);
+                            textView.setTextSize(TEXT_SIZE);
+                            Typeface typeface = ResourcesCompat.getFont(this, R.font.my_font_bold);
+                            textView.setTypeface(typeface);
+                            textView.setBackgroundResource(R.drawable.cell_border);
+                            textView.setPadding(0, 20, 0, 10);
+                            try {
+                                textView.setText(gradingData.get(i).get(j));
+                            } catch (Exception e) {
+                                Log.d("ERRORR INDEX:", String.valueOf(j));
+                            }
+                            textView.setTextColor(Color.BLACK);
+                            // 合模如果造模完成後超過2天，show紅色字體
+                            Log.d("DEBUG:", gradingData.get(0).get(2));
+                            if (gradingData.get(0).get(2).indexOf("外模") != -1) {// 合模會show外模完成日，以此作為條件判斷
+                                Date toDay = new Date();
+                                if (i != 0) {
+                                    SimpleDateFormat sdf = new SimpleDateFormat("yyyyMMdd");
+                                    Date moldCompDate = null;
+                                    try {
+                                        moldCompDate = sdf.parse(gradingData.get(i).get(2).toString());
+
+                                        Log.d("DEBUG:", toDay.toString());
+                                        Log.d("DEBUG:", moldCompDate.toString());
+                                        if (((toDay.getTime() - moldCompDate.getTime()) / (1000 * 60 * 60 * 24)) > 2) {
+                                            if (gradingData.get(i).get(0).toString().indexOf("未進站") != -1) {
+                                                textView.setTextColor(Color.RED);
+                                            }
+                                        }
+                                    } catch (Exception e) {
+                                        throw new RuntimeException(e);
+                                    }
+                                }
+                            }
+                            if (i == 0) {
+                                textView.setBackgroundColor(Color.parseColor("#aeaeae"));
+                            } else {
+                                if (j == 0) {
+                                    if (gradingData.get(i).get(j).indexOf("未進站") != -1) {
+                                        textView.setTextColor(Color.BLACK);
+                                        textView.setBackgroundColor(Color.parseColor("#00ff00"));
+                                    } else if (gradingData.get(i).get(j).indexOf("已完成") != -1) {
+                                        textView.setTextColor(Color.BLACK);
+                                        textView.setBackgroundColor(Color.YELLOW);
+                                    } else {
+                                        textView.setTextColor(Color.WHITE);
+                                        textView.setBackgroundColor(Color.RED);
+                                    }
+                                }
+                            }
+                            CardView cardView = new CardView(this);
+                            cardView.setPadding(10, 10, 10, 10);
+                            cardView.setRadius(15);
+
+                            cardView.setMinimumHeight(30);
+                            cardView.setMinimumWidth(30);
+                            cardView.addView(textView);
+                            tableRow.addView(cardView, tableRowParams);
+                        }
+                        else
+                        {
+                            CardView cardView = new CardView(this);
+                            cardView.setPadding(10, 10, 10, 10);
+                            cardView.setRadius(15);
+                            cardView.setMinimumHeight(40);
+                            cardView.setMinimumWidth(30);
+                            cardView.setBackgroundColor(Color.WHITE);
+
+                            Button btn = new Button(this);
+                            btn.setText("模具報修");
+                            btn.setHeight(40);
+                            btn.setOnClickListener(new View.OnClickListener() {
+                                @Override
+                                public void onClick(View v) {
+                                    // 建立一個垂直方向的 LinearLayout 作為容器
+                                    LinearLayout layout = new LinearLayout(MainActivity.this);
+                                    layout.setOrientation(LinearLayout.VERTICAL);
+                                    layout.setPadding(50, 40, 50, 10); // 可選的 padding，讓 UI 看起來更舒服
+                                    // 工號
+                                    final EditText input = new EditText(MainActivity.this);
+                                    input.setHint("請輸入工號");
+                                    input.setText(reportWorkingNumber);
+                                    input.setInputType(InputType.TYPE_CLASS_NUMBER);
+                                    layout.addView(input);
+                                    Log.d("DEBUG", "index:"+index);
+                                    if (hm.containsKey(workOrderList.get(index - 1))) {
+                                        flaskId = (String) hm.get(workOrderList.get(index - 1));
+                                    }
+                                    final EditText flaskInput = new EditText(MainActivity.this);
+                                    if (departmentType.equals("造模") || departmentType.equals("合模") || departmentName.indexOf("熔解") != -1) {// 造模、合模、澆注均需要可以改鐵斗號碼
+                                        flaskInput.setHint("請輸入鐵斗");
+                                        flaskInput.setText(flaskId);
+                                        flaskInput.setInputType(InputType.TYPE_CLASS_NUMBER);
+                                        layout.addView(flaskInput);
+                                    }
+                                    AlertDialog.Builder flaskRepairBuilder = new AlertDialog.Builder(MainActivity.this);
+                                    flaskRepairBuilder.setTitle("鐵斗報修").setMessage("報修"+flaskInput.getText().toString()+"，確定?").setView(layout)
+                                            .setPositiveButton("報修",  (dialog2, which2) -> {
+                                                try {
+                                                    String[] workOrderArr = workOrderList.get(index - 1).split("-");
+                                                    Request request = model.RepairFlask(workOrderArr, gradingData, index, input.getText().toString(), flaskInput.getText().toString());
+                                                    Call call = okHttpClient.newCall(request);
+                                                    call.enqueue(new Callback() {
+                                                        @Override
+                                                        public void onFailure(@NonNull Call call, @NonNull IOException e) {
+                                                            ((MainActivity) v.getContext()).runOnUiThread(
+                                                                    () -> Toast.makeText(MainActivity.this, e.toString() + e.getStackTrace(), Toast.LENGTH_LONG).show()
+                                                            );
+                                                        }
+                                                        @Override
+                                                        public void onResponse(@NonNull Call call, @NonNull Response response) throws IOException {
+                                                            try {
+                                                                ((MainActivity) v.getContext()).runOnUiThread(
+                                                                        () -> {
+                                                                            doAfterWorkReporting(response);
+                                                                        }
+                                                                );
+                                                                GetData();
+                                                            } catch (Exception ex) {
+                                                                Log.e("ReportWorkError", ex + Arrays.toString(ex.getStackTrace()));
+                                                            }
+                                                        }
+                                                    });
+                                                } catch (Exception ex) {
+                                                    ((MainActivity) v.getContext()).runOnUiThread(
+                                                            () -> Toast.makeText(MainActivity.this, ex + Arrays.toString(ex.getStackTrace()), Toast.LENGTH_LONG).show()
+                                                    );
+                                                }
+                                            })
+                                            .setNegativeButton("取消", (dialog2, which2) -> {
+                                            }).show();
+                                }
+                            });
+                            cardView.addView(btn);
+
+                            tableRow.addView(cardView, tableRowParams);
+                        }
+                    }
+                }
+                tableLayout.addView(tableRow, tableLayoutParams);
+            } catch (Exception ex1){
+                Log.d("ERROR index:", String.valueOf(i));
+                Log.d("ERROR :", ex1.toString() + Arrays.toString(ex1.getStackTrace()));
             }
-            tableLayout.addView(tableRow, tableLayoutParams);
         }
         return tableLayout;
+    }
+
+    private void doAfterWorkReporting(Response response) {
+        ResponseBody responseBody = response.body();
+        SandcoreWorkOrderRes res = new SandcoreWorkOrderRes();
+        try {
+            if (responseBody != null) {
+                String jsonString = responseBody.string();  // 只能讀一次
+                res = new Gson().fromJson(jsonString, SandcoreWorkOrderRes.class);
+                //                                                                        Log.d("debug", "response.body().string():"+jsonString);
+            }
+            if (res.WorkStatus.equals("OK"))
+                Toast.makeText(MainActivity.this, "執行成功", Toast.LENGTH_LONG).show();
+            else
+                Toast.makeText(MainActivity.this, res.ErrorMsg, Toast.LENGTH_LONG).show();
+        } catch (
+                Exception e) {
+            Toast.makeText(MainActivity.this, e+ Arrays.toString(e.getStackTrace()), Toast.LENGTH_LONG).show();
+        }
     }
 
     /**

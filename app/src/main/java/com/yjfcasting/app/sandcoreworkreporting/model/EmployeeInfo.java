@@ -7,4 +7,5 @@ public class EmployeeInfo {
     public String DeptName;
     public String DeptType;
     public Boolean IsManager;
+    public String AlternateDeptName;
 }

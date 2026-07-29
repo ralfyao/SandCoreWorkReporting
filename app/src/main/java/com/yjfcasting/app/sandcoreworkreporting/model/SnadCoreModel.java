@@ -15,7 +15,7 @@ import okhttp3.Request;
 
 public class SnadCoreModel {
     // 報工
-    public Request UploadSfcData(@NonNull String[] workOrderArr, @NonNull ArrayList<ArrayList<String>> gradingData, int index, String userCode, String flaskId){
+    public Request UploadSfcData(@NonNull String[] workOrderArr, @NonNull ArrayList<ArrayList<String>> gradingData, int index, String userCode, String flaskId, String flowNum){
         FormBody body = new FormBody.Builder()
                 .add("ProductionOrderHead", workOrderArr[0])
                 .add("ProductionOrder",  workOrderArr[1])
@@ -34,6 +34,19 @@ public class SnadCoreModel {
                     .add("AppVersion", "1.0")
                     .add("FlaskID", flaskId)
                     .add("BottomFlaskID", flaskId)
+                    .add("TransferDate", new SimpleDateFormat("yyyyMMdd").format(new Date())).build();
+        }
+        if (flowNum != null && !flowNum.equals("")){
+            body = new FormBody.Builder()
+                    .add("ProductionOrderHead", workOrderArr[0])
+                    .add("ProductionOrder",  workOrderArr[1])
+                    .add("Type", gradingData.get(index).get(0).indexOf("未進站") != -1 ? "in" : "out")
+                    .add("UserCode", userCode)
+                    .add("Sequence", "0")
+                    .add("AppVersion", "1.0")
+                    .add("FlaskID", flaskId)
+                    .add("BottomFlaskID", flaskId)
+                    .add("FlowNum", flowNum)
                     .add("TransferDate", new SimpleDateFormat("yyyyMMdd").format(new Date())).build();
         }
 

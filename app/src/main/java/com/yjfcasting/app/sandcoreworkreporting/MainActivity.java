@@ -3,7 +3,7 @@ package com.yjfcasting.app.sandcoreworkreporting;
 import static android.view.ViewGroup.LayoutParams.MATCH_PARENT;
 
 
-
+import android.content.DialogInterface;
 import android.content.Intent;
 import android.graphics.Color;
 import android.graphics.Typeface;
@@ -102,6 +102,7 @@ public class MainActivity extends BaseActivity {
     private static boolean isManager = false;// 是否為系統管理者
     private AppBarConfiguration appBarConfiguration;
     private SwipeRefreshLayout swipeRefreshLayout;
+    private static String sFlowNum = "";
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -453,9 +454,9 @@ public class MainActivity extends BaseActivity {
     }
 
     private void uploadSfcData(String[] workOrderArr,  ArrayList<ArrayList<String>> gradingData, int index,
-                               String inputText, String flaskInputText, View v) {
+                               String inputText, String flaskInputText, String flowNumInput, View v) {
 
-        Request request = model.UploadSfcData(workOrderArr, gradingData, index, inputText, flaskInputText);
+        Request request = model.UploadSfcData(workOrderArr, gradingData, index, inputText, flaskInputText, flowNumInput);
         Call call = okHttpClient.newCall(request);
 
         call.enqueue(new Callback() {
@@ -604,6 +605,26 @@ public class MainActivity extends BaseActivity {
                             flaskInput.setInputType(InputType.TYPE_CLASS_NUMBER);
                             layout.addView(flaskInput);
                         }
+                        // 合模戰輸入流水號
+                        final EditText flowNumInput = new EditText(MainActivity.this);
+                        if (departmentType.equals("合模")){
+                            flowNumInput.setHint("請輸入流水號");
+                            flowNumInput.setText(sFlowNum);
+
+                            final Button button = new Button(MainActivity.this);
+                            button.setText("清空流水號");
+                            button.setOnClickListener(new View.OnClickListener() {
+                                @Override
+                                public void onClick(View v) {
+                                    sFlowNum = "";
+                                    flowNumInput.setText(sFlowNum);
+                                }
+                            });
+
+                            layout.addView(flowNumInput);
+                            layout.addView(button);
+                        }
+
 
                         AlertDialog.Builder builder = new AlertDialog.Builder(MainActivity.this);
                         builder.setTitle("報工")
@@ -623,15 +644,31 @@ public class MainActivity extends BaseActivity {
                                 if (flaskId == null || flaskId.isEmpty()) {
                                     flaskId = flaskInput.getText().toString();
                                 }
+                                sFlowNum = flowNumInput.getText().toString();
+                                if (departmentType.indexOf("合模") != -1 && sFlowNum.trim().equals("")){
+                                    AlertDialog.Builder alert = new AlertDialog.Builder(MainActivity.this);
+                                    alert.setTitle("提示")
+                                            .setMessage("請輸入流水號!")
+//                                            .setView(layout)
+                                            .setNegativeButton("取消", new DialogInterface.OnClickListener() {
+                                                @Override
+                                                public void onClick(DialogInterface dialog, int which) {
+
+                                                }
+                                            })
+                                            .show();
+                                    return;
+                                }
                                 if (!flaskId.equals(flaskInput.getText().toString())) {
                                     AlertDialog.Builder flaskBuilder = new AlertDialog.Builder(MainActivity.this);
                                     if (departmentType.indexOf("合模") != -1) {
+
                                         flaskBuilder.setTitle("報工")
                                                 .setMessage("合模維護的下模編號與造模維護的編號不同，是否要更新?")
                                                 .setPositiveButton("報工", (dialog1, which1) -> ((MainActivity) v.getContext()).runOnUiThread(
                                                         () -> {
                                                             String[] workOrderArr = workOrderList.get(index - 1).split("-");
-                                                            Request request = model.UploadSfcData(workOrderArr, gradingData, index, input.getText().toString(), flaskInput.getText().toString());
+                                                            Request request = model.UploadSfcData(workOrderArr, gradingData, index, input.getText().toString(), flaskInput.getText().toString(), flowNumInput.getText().toString());
                                                             Call call = okHttpClient.newCall(request);
                                                             call.enqueue(new Callback() {
                                                                 @Override
@@ -664,11 +701,12 @@ public class MainActivity extends BaseActivity {
                                     if (departmentType.indexOf("造模") != -1){
                                         String[] workOrderArr = workOrderList.get(index - 1).split("-");
                                         uploadSfcData(workOrderArr, gradingData, index,
-                                                input.getText().toString(), flaskInput.getText().toString(), v);
+                                                input.getText().toString(), flaskInput.getText().toString(), flowNumInput.getText().toString(), v);
                                     }
-                                } else {
+                                }
+                                else {
                                     String[] workOrderArr = workOrderList.get(index - 1).split("-");
-                                    Request request = model.UploadSfcData(workOrderArr, gradingData, index, input.getText().toString(), flaskInput.getText().toString());
+                                    Request request = model.UploadSfcData(workOrderArr, gradingData, index, input.getText().toString(), flaskInput.getText().toString(), flowNumInput.getText().toString());
                                     Call call = okHttpClient.newCall(request);
                                     call.enqueue(new Callback() {
                                         @Override
